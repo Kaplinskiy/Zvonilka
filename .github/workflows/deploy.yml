@@ -1,0 +1,61 @@
+name: Deploy
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install deps & Build
+        run: |
+          npm ci
+          npm run build
+
+      - name: Add SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_KEY }}
+
+      - name: Show target
+        run: |
+          echo "Host=${{ secrets.SSH_HOST }}"
+          echo "User=${{ secrets.SSH_USER }}"
+          echo "Path=${{ secrets.DEPLOY_PATH }}"
+
+      - name: Rsync to server (dist + server files)
+        run: |
+          rsync -az --delete \
+            --exclude=".git" \
+            --exclude=".github" \
+            --exclude="node_modules" \
+            dist/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/dist/
+          rsync -az \
+            ecosystem.config.cjs package.json package-lock.json server.js \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/
+
+      - name: Install prod deps & restart PM2
+        run: |
+          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+          set -e
+          cd ${{ secrets.DEPLOY_PATH }}
+          npm ci --omit=dev
+          pm2 startOrReload ecosystem.config.cjs || pm2 start ecosystem.config.cjs
+          pm2 save
+          EOF
