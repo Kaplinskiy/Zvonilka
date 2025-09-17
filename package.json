@@ -1,0 +1,22 @@
+{
+    "name": "webrtc-signal",
+    "version": "0.1.0",
+    "type": "module",
+    "private": true,
+    "scripts": {
+        "start": "node server.js",
+        "dev": "vite",
+        "build": "vite build",
+        "preview": "vite preview --host",
+        "start:pm2": "pm2 startOrReload ecosystem.config.js"
+    },
+    "dependencies": {
+        "cors": "^2.8.5",
+        "express": "^4.21.2",
+        "nanoid": "^5.0.7",
+        "ws": "^8.18.3"
+    },
+    "devDependencies": {
+        "vite": "^6.1.6"
+    }
+}
