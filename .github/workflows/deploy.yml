@@ -27,6 +27,12 @@ jobs:
         run: |
           npm ci
           npm run build
+      - name: Validate secrets
+        run: |
+          test -n "${{ secrets.SSH_KEY }}" || { echo "SSH_KEY is empty"; exit 1; }
+          test -n "${{ secrets.SSH_HOST }}" || { echo "SSH_HOST is empty"; exit 1; }
+          test -n "${{ secrets.SSH_USER }}" || { echo "SSH_USER is empty"; exit 1; }
+          test -n "${{ secrets.DEPLOY_PATH }}" || { echo "DEPLOY_PATH is empty"; exit 1; }
 
       - name: Add SSH key
         uses: webfactory/ssh-agent@v0.9.0
