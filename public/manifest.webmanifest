@@ -1,13 +1,28 @@
 {
-    "name": "Звонилка Каплинского",
-    "short_name": "Звонилка",
-    "start_url": "/",
-    "scope": "/",
-    "display": "standalone",
-    "background_color": "#0b0f14",
-    "theme_color": "#0b0f14",
-    "description": "Простой и надёжный веб-звонок через WebRTC с упором на работу в ограниченных сетях.",
-    "icons": [
-      { "src": "/public/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
-    ]
-  }
+  "name": "Звонилка Каплинского",
+  "short_name": "Звонилка",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b0f14",
+  "theme_color": "#0b0f14",
+  "description": "Простой и надёжный веб-звонок через WebRTC с упором на работу в ограниченных сетях.",
+  "icons": [
+    {
+      "src": "/icons/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/maskable_icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
