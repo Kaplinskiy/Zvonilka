@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- handset -->
+  <path d="M154 180c18-18 46-18 64 0l18 18c10 10 10 26 0 36l-12 12c20 40 46 66 86 86l12-12c10-10 26-10 36 0l18 18c18 18 18 46 0 64-20 20-52 22-78 12-86-34-158-106-192-192-10-26-8-58 12-78z"
+        fill="#3b82f6"/>
+  <!-- p2p link -->
+  <g fill="none" stroke="#60a5fa" stroke-width="24" stroke-linecap="round">
+    <path d="M320 136h56a40 40 0 0 1 0 80h-56"/>
+    <path d="M192 216h-56a40 40 0 0 1 0-80h56"/>
+  </g>
+</svg>
