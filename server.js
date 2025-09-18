@@ -5,10 +5,17 @@ import cors from 'cors';
 import http from 'http';
 import { WebSocketServer } from 'ws';
 import { parse as parseUrl } from 'url';
+import crypto from 'crypto';
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// TURN dynamic credentials config (coturn REST API style)
+// Required: TURN_SECRET must match coturn's static-auth-secret.
+const TURN_SECRET = process.env.TURN_SECRET || '';
+const TURN_URLS = (process.env.TURN_URLS || 'turns:turn.zababba.com:443?transport=tcp').split(',').map(s => s.trim()).filter(Boolean);
+const TURN_TTL = parseInt(process.env.TURN_TTL || '120', 10); // seconds
 
 // Универсальный хэндлер создания комнаты (совместим с /signal и /signal/create)
 function createRoomHandler(_req, res) {
@@ -24,6 +31,29 @@ app.post('/signal/create', createRoomHandler);
 
 // Совместимый путь (если фронт вызывает /signal/rooms)
 app.post('/signal/rooms', createRoomHandler);
+
+// Issue temporary TURN credentials (HMAC-SHA1 per coturn "REST API")
+app.get('/turn-credentials', (req, res) => {
+  try {
+    if (!TURN_SECRET) {
+      return res.status(500).json({ error: 'TURN_SECRET is not set on server' });
+    }
+    const user = (req.query.user || 'zvonilka').toString().slice(0, 32);
+    const expiry = Math.floor(Date.now() / 1000) + TURN_TTL; // unix ts
+    const username = `${expiry}:${user}`;
+    const credential = crypto.createHmac('sha1', TURN_SECRET).update(username).digest('base64');
+
+    res.set('Cache-Control', 'no-store');
+    return res.json({
+      iceServers: [
+        { urls: TURN_URLS, username, credential }
+      ],
+      ttl: TURN_TTL
+    });
+  } catch (e) {
+    return res.status(500).json({ error: 'turn-credentials failure' });
+  }
+});
 
 const server = http.createServer(app);
 
