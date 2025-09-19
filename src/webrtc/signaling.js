@@ -48,7 +48,7 @@
         resolve({ memberId: 'already-open' });
         return;
       }
-      const q = new URLSearchParams({ roomId, role }).toString();
+      const q = new URLSearchParams({ room: roomId, role }).toString();
       const url = `${CFG.WS_URL}?${q}`;
       if (window.addLog) window.addLog('signal', `connect WS ${url}`);
 
