@@ -76,6 +76,14 @@
     html[dir="rtl"] label { text-align:right; }
     html[dir="rtl"] .list{ direction:rtl; padding-right:18px; padding-left:0; }
     html[dir="rtl"] .pill{ direction:rtl; }
+    /* i18n language switch - compact */
+    .lang-switch{ display:flex; gap:6px; margin-left:auto }
+    .lang-switch .lang-btn{
+      padding:6px 10px; font-size:12px;
+      background:#152030; color:#cfe0f6;
+      border:1px solid #22324a; border-radius:10px; box-shadow:none
+    }
+    .lang-switch .lang-btn.active{ background:#22324a }
   </style>
 </head>
 <body>
@@ -89,7 +97,7 @@
           <span class="badge" id="roomNote">—</span>
         </div>
         <div class="spacer"></div>
-        <div id="lang-switch" class="btnbar" style="flex:0 0 auto;gap:8px"></div>
+        <div id="lang-switch" class="lang-switch"></div>
         <div class="btnbar" style="flex:0 0 auto;gap:8px">
           <button id="btnHowTo" class="ghost" data-i18n="menu.howto">📘 Инструкция</button>
           <button id="btnAbout" class="ghost" data-i18n="menu.about">ℹ️ О программе</button>

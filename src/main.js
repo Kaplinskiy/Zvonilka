@@ -46,13 +46,25 @@ export function applyI18nToDOM() {
 async function initI18n() {
   const initialLng = detectLang();
   document.documentElement.dir = (initialLng === 'he') ? 'rtl' : 'ltr';
-  await i18next.use(HttpBackend).init({
-    lng: initialLng,
-    fallbackLng: FALLBACK,
-    supportedLngs: SUPPORTED,
-    backend: { loadPath: '/public/i18n/{{lng}}.json' },
-    interpolation: { escapeValue: false }
+
+  i18next.on('failedLoading', (lng, ns, msg) => {
+    try { console.error('[i18n] failed', lng, ns, msg); } catch {}
   });
+
+  await i18next
+    .use(HttpBackend)
+    .init({
+      lng: initialLng,
+      fallbackLng: FALLBACK,
+      supportedLngs: SUPPORTED,
+      backend: {
+        // В проде public = корень. Файлы лежат по /i18n/*.json
+        loadPath: '/i18n/{{lng}}.json'
+      },
+      interpolation: { escapeValue: false },
+      debug: false
+    });
+
   renderLangSwitch(initialLng);
   applyI18nToDOM();
 }
