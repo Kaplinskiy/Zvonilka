@@ -1,4 +1,6 @@
 // src/main.js
+import i18next from 'https://unpkg.com/i18next@23.11.5/dist/esm/i18next.js';
+import HttpBackend from 'https://unpkg.com/i18next-http-backend@2.6.2/esm/index.js';
 // Глобальные модули (они вешают API на window.*)
 import './js/helpers.js';
 import './js/signaling.js';
@@ -6,10 +8,73 @@ import './js/webrtc.js';
 import './js/ui.js';
 
 // ---- BOOTSTRAP ----
-// Минимальная инициализация UI и логики, раньше это было инлайном в index.html.
+const STORAGE_KEY = 'lang';
+const SUPPORTED = ['ru','en','he'];
+const FALLBACK = 'en';
+
+function detectLang() {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved && SUPPORTED.includes(saved)) return saved;
+  const nav = (navigator.language || 'en').slice(0,2).toLowerCase();
+  return SUPPORTED.includes(nav) ? nav : FALLBACK;
+}
+
+export async function setLanguage(lng) {
+  if (!SUPPORTED.includes(lng)) lng = FALLBACK;
+  localStorage.setItem(STORAGE_KEY, lng);
+  document.documentElement.dir = (lng === 'he') ? 'rtl' : 'ltr';
+  await i18next.changeLanguage(lng);
+  applyI18nToDOM();
+  renderLangSwitch(lng);
+}
+
+export function applyI18nToDOM() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const k = el.getAttribute('data-i18n');
+    if (k) el.textContent = i18next.t(k);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    const k = el.getAttribute('data-i18n-placeholder');
+    if (k) el.setAttribute('placeholder', i18next.t(k));
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    const k = el.getAttribute('data-i18n-title');
+    if (k) el.setAttribute('title', i18next.t(k));
+  });
+}
+
+async function initI18n() {
+  const initialLng = detectLang();
+  document.documentElement.dir = (initialLng === 'he') ? 'rtl' : 'ltr';
+  await i18next.use(HttpBackend).init({
+    lng: initialLng,
+    fallbackLng: FALLBACK,
+    supportedLngs: SUPPORTED,
+    backend: { loadPath: '/public/i18n/{{lng}}.json' },
+    interpolation: { escapeValue: false }
+  });
+  renderLangSwitch(initialLng);
+  applyI18nToDOM();
+}
+
+function renderLangSwitch(active) {
+  const root = document.getElementById('lang-switch');
+  if (!root) return;
+  root.innerHTML = '';
+  SUPPORTED.forEach(lng => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'lang-btn' + (lng === active ? ' active' : '');
+    btn.textContent = lng.toUpperCase();
+    btn.addEventListener('click', () => setLanguage(lng));
+    root.appendChild(btn);
+  });
+}
+
 (function boot() {
   if (window.__CALL_APP_LOADED__) return;
   window.__CALL_APP_LOADED__ = true;
+  initI18n();
 
   // --- DOM ---
   const statusEl = document.getElementById('status');

@@ -25,16 +25,25 @@
     btnNativeShare.onclick = () => {
       const txt = shareLinkEl.value || '';
       if (navigator.share) {
-        navigator.share({ title:'Приглашение на звонок', text:`Вам звонят: ${txt}`, url: txt }).catch(()=>{});
+        navigator.share({
+          title: i18next.t('dialog.invite_title'),
+          text: i18next.t('call.offer_received_click_answer') + ' ' + txt,
+          url: txt
+        }).catch(()=>{});
       } else if (noteEl) {
-        noteEl.textContent = 'Native Share недоступен';
+        noteEl.textContent = i18next.t('share.native_unavailable');
       }
     };
   }
   if (btnCopy && shareLinkEl) {
     btnCopy.onclick = async () => {
-      try { await navigator.clipboard.writeText(shareLinkEl.value||''); if (noteEl) noteEl.textContent='Ссылка скопирована'; }
-      catch { if (noteEl) noteEl.textContent='Скопируйте вручную'; }
+      try {
+        await navigator.clipboard.writeText(shareLinkEl.value||'');
+        if (noteEl) noteEl.textContent = i18next.t('common.link_copied');
+      }
+      catch {
+        if (noteEl) noteEl.textContent = i18next.t('common.will_be_generated');
+      }
     };
   }
 

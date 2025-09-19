@@ -1,0 +1,86 @@
+{
+  "app.title": "Kaplinsky Dialer",
+  "app.hero": "Free voice calls right in the browser. Works even when WhatsApp/Telegram are blocked.",
+  "app.brand": "📞 Kaplinsky Dialer",
+  "app.subtitle": "Simple and reliable WebRTC call. Works even in restricted networks (TURN 443/TCP).",
+
+  "menu.howto": "📘 Instructions",
+  "menu.about": "ℹ️ About",
+  "menu.debug": "🛠️ Debug",
+
+  "btn.start_call": "📞 Start Call",
+  "btn.answer_call": "✅ Answer Call",
+  "btn.hangup": "🛑 Hang Up",
+  "btn.share": "📤 Share",
+  "btn.copy_link": "📋 Copy Link",
+  "btn.copy_report": "🧰 Copy Report",
+  "btn.refresh": "Refresh",
+
+  "label.status": "Status:",
+  "label.invite_link": "Invitation Link",
+
+  "howto.title": "How to Call",
+  "howto.under_the_hood": "Under the Hood",
+  "howto.if_no_connect": "If it doesn't connect",
+  "howto.step_site": "Go to the site",
+  "howto.step_start": "Click “Start Call” and send the generated link to your partner.",
+  "howto.step_answer": "Ask your partner to open the link in an external browser and click “Answer Call”.",
+  "howto.step_end": "After connecting, only the “Hang Up” button remains.",
+  "howto.tip_open_external": "Open the link in an external browser (in WhatsApp/Telegram → “Open in browser”).",
+  "howto.tip_mic": "Allow microphone access.",
+  "howto.tip_https": "Make sure the site is opened via HTTPS.",
+
+  "about.lead": "Kaplinsky Dialer is a small and modest free hobby project. The goal is simple and reliable voice communication right in the browser.",
+  "about.privacy1": "Conversations are not recorded or shared with anyone.",
+  "about.privacy2": "Technically, server-side recording is not implemented.",
+  "about.contact_label": "Contact me:",
+  "about.contact": "Contact me: mail@zababba.com",
+
+  "common.ready": "Ready",
+  "common.link_copied": "Link copied",
+  "common.will_be_generated": "(will be generated)",
+
+  "diag.checking_env": "Checking environment…",
+  "diag.inapp_browser": "In-App browser",
+  "dev.client_loaded_vite": "Client loaded (Vite dev, TURN relay policy from config.js)",
+
+  "ws.disconnected": "WS not connected",
+  "ws.waiting_offer": "WS connected, waiting for offer",
+  "ws.already_connected_callee": "WS already connected (callee)",
+
+  "room.ready_share_link": "Room is ready. Share the link or wait for the peer to join",
+  "room.open_invite_with_param": "Open the invitation with ?room=…",
+  "room.no_room_in_url_caller": "No room in URL — this is Caller",
+
+  "call.ended": "Call ended",
+  "call.offer_received_click_answer": "Offer received — click “Answer Call”",
+
+  "status.initializing": "Initializing…",
+  "status.preparing": "Preparing…",
+  "status.connecting": "Connecting…",
+  "status.connected": "Connection established",
+  "status.closed": "Connection closed",
+  "status.lost_recovering": "Connection lost, trying to recover…",
+
+  "signal.recovering": "Restoring signaling…",
+  "signal.waiting_offer": "Waiting for offer…",
+
+  "error.connection": "Connection error",
+  "error.room_create_failed": "Room creation error",
+  "error.btnanswer_no_room": "btnAnswer has no room",
+  "error.btnanswer_no_offer": "btnAnswer has no offer",
+
+  "share.native_unavailable": "Native Share unavailable",
+
+  "debug.title": "Debug",
+  "debug.protocol": "Protocol",
+  "debug.copy_and_send": "Copy and send us during debugging.",
+
+  "hint.send_invite_whatsapp": "Send the link to your partner (in WhatsApp → “Open in browser”).",
+
+  "offline.title": "Dialer — Offline",
+  "offline.no_internet": "No Internet connection",
+  "offline.hint": "To make a call, you need to restore the connection. Check the network and refresh the page.",
+
+  "dialog.invite_title": "Call Invitation"
+}

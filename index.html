@@ -68,27 +68,36 @@
     .topline .spacer{display:none}
     .status-area{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
     .status-note{min-width:260px}
+    /* RTL support */
+    html[dir="rtl"] body{ text-align:right; }
+    html[dir="rtl"] .wrap{ direction:rtl; }
+    html[dir="rtl"] h1,
+    html[dir="rtl"] p,
+    html[dir="rtl"] label { text-align:right; }
+    html[dir="rtl"] .list{ direction:rtl; padding-right:18px; padding-left:0; }
+    html[dir="rtl"] .pill{ direction:rtl; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>📞 Звонилка Каплинского</h1>
+    <h1 data-i18n="app.brand">📞 Звонилка Каплинского</h1>
 
     <div class="card">
       <div class="topline">
         <div class="status-area">
-          <span class="pill">Статус: <span id="status" aria-live="polite">инициализация…</span></span>
+          <span class="pill"><span data-i18n="label.status">Статус:</span> <span id="status" aria-live="polite" data-i18n="status.initializing">инициализация…</span></span>
           <span class="badge" id="roomNote">—</span>
         </div>
         <div class="spacer"></div>
+        <div id="lang-switch" class="btnbar" style="flex:0 0 auto;gap:8px"></div>
         <div class="btnbar" style="flex:0 0 auto;gap:8px">
-          <button id="btnHowTo" class="ghost">📘 Инструкция</button>
-          <button id="btnAbout" class="ghost">ℹ️ О программе</button>
-          <button id="btnDebug" class="ghost">🛠️ Отладка</button>
+          <button id="btnHowTo" class="ghost" data-i18n="menu.howto">📘 Инструкция</button>
+          <button id="btnAbout" class="ghost" data-i18n="menu.about">ℹ️ О программе</button>
+          <button id="btnDebug" class="ghost" data-i18n="menu.debug">🛠️ Отладка</button>
         </div>
       </div>
 
-      <div id="note" class="muted status-note">Проверяем окружение…</div>
+      <div id="note" class="muted status-note" data-i18n="diag.checking_env">Проверяем окружение…</div>
 
       <audio id="remoteAudio" controls autoplay playsinline></audio>
     </div>
@@ -96,39 +105,39 @@
     <!-- Панель управления -->
     <div class="card controls">
       <div class="btnbar">
-        <button id="btnCall"   class="primary big">📞 Начать звонок</button>
-        <button id="btnAnswer" class="big hidden">✅ Ответить на звонок</button>
-        <button id="btnHang"   class="warn big" disabled>🛑 Завершить</button>
+        <button id="btnCall"   class="primary big" data-i18n="btn.start_call">📞 Начать звонок</button>
+        <button id="btnAnswer" class="big hidden" data-i18n="btn.answer_call">✅ Ответить на звонок</button>
+        <button id="btnHang"   class="warn big" disabled data-i18n="btn.hangup">🛑 Завершить</button>
       </div>
 
       <div id="shareWrap" class="hidden" style="margin-top:var(--gap)">
         <div class="btnbar">
-          <button id="btnNativeShare" class="primary">📤 Поделиться</button>
-          <button id="btnCopy"        class="">📋 Копировать ссылку</button>
+          <button id="btnNativeShare" class="primary" data-i18n="btn.share">📤 Поделиться</button>
+          <button id="btnCopy"        class="" data-i18n="btn.copy_link">📋 Копировать ссылку</button>
         </div>
         <div style="margin-top:8px">
-          <label class="muted">Ссылка приглашения</label>
+          <label class="muted" data-i18n="label.invite_link">Ссылка приглашения</label>
           <input id="shareLink" type="text" readonly value="(будет сгенерировано)" style="width:100%;background:#0b1220;color:var(--fg);border:1px solid #253041;border-radius:12px;padding:10px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">
-          <div class="muted">Отправьте ссылку собеседнику (в WhatsApp → «Открыть в браузере»).</div>
+          <div class="muted" data-i18n="hint.send_invite_whatsapp">Отправьте ссылку собеседнику (в WhatsApp → «Открыть в браузере»).</div>
         </div>
       </div>
     </div>
 
     <!-- Отладка -->
     <div id="debugBlock" class="card hidden">
-      <h3 style="margin-top:0">Отладка</h3>
+      <h3 style="margin-top:0" data-i18n="debug.title">Отладка</h3>
       <div class="kvs">
-        <div class="muted">Протокол</div>          <div id="dbgProto"  class="mono">—</div>
+        <div class="muted" data-i18n="debug.protocol">Протокол</div>          <div id="dbgProto"  class="mono">—</div>
         <div class="muted">Secure context</div>    <div id="dbgSecure" class="mono">—</div>
         <div class="muted">getUserMedia</div>      <div id="dbgGUM"    class="mono">—</div>
         <div class="muted">RTCPeerConnection</div> <div id="dbgPC"     class="mono">—</div>
         <div class="muted">User-Agent</div>        <div id="dbgUA"     class="mono">—</div>
-        <div class="muted">In-App браузер</div>    <div id="dbgInApp"  class="mono">—</div>
+        <div class="muted" data-i18n="diag.inapp_browser">In-App браузер</div>    <div id="dbgInApp"  class="mono">—</div>
       </div>
       <div class="sep"></div>
       <div class="row">
-        <button id="btnCopyDiag">🧰 Скопировать отчёт</button>
-        <div class="muted">Скопируйте и пришлите нам при отладке.</div>
+        <button id="btnCopyDiag" data-i18n="btn.copy_report">🧰 Скопировать отчёт</button>
+        <div class="muted" data-i18n="debug.copy_and_send">Скопируйте и пришлите нам при отладке.</div>
       </div>
       <div id="logList" class="mono" aria-live="polite"></div>
     </div>
@@ -137,26 +146,26 @@
   <!-- Диалог: Инструкция -->
   <dialog id="dlgHowTo">
     <div class="dlg-head">
-      <strong>📘 Инструкция</strong>
+      <strong data-i18n="menu.howto">📘 Инструкция</strong>
       <button class="ghost" onclick="this.closest('dialog').close()">✖</button>
     </div>
     <div class="dlg-body">
-      <h3>Как позвонить</h3>
+      <h3 data-i18n="howto.title">Как позвонить</h3>
       <ol class="list">
-        <li>Зайдите на сайт <a class="link" href="https://call.zababba.com" target="_blank" rel="noopener">call.zababba.com</a>.</li>
-        <li>Нажмите «Начать звонок» и отправьте собеседнику сгенерированную ссылку.</li>
-        <li>Попросите собеседника открыть ссылку во внешнем браузере и нажать «Ответить на звонок».</li>
-        <li>После соединения останется только кнопка «Завершить».</li>
+        <li><span data-i18n="howto.step_site">Зайдите на сайт</span> <a class="link" href="https://call.zababba.com" target="_blank" rel="noopener">call.zababba.com</a>.</li>
+        <li data-i18n="howto.step_start">Нажмите «Начать звонок» и отправьте собеседнику сгенерированную ссылку.</li>
+        <li data-i18n="howto.step_answer">Попросите собеседника открыть ссылку во внешнем браузере и нажать «Ответить на звонок».</li>
+        <li data-i18n="howto.step_end">После соединения останется только кнопка «Завершить».</li>
       </ol>
 
-      <h3>Что под капотом</h3>
+      <h3 data-i18n="howto.under_the_hood">Что под капотом</h3>
       <p>Звонки идут через стандарт WebRTC и шифруются. Мы используем только ретранслятор (TURN) на порту 443/TCP, чтобы работало даже при строгих ограничениях сети.</p>
 
-      <h3>Если не подключается</h3>
+      <h3 data-i18n="howto.if_no_connect">Если не подключается</h3>
       <ul class="list">
-        <li>Откройте ссылку во внешнем браузере (в WhatsApp/Telegram → «Открыть в браузере»).</li>
-        <li>Разрешите доступ к микрофону.</li>
-        <li>Проверьте, что сайт открыт по HTTPS.</li>
+        <li data-i18n="howto.tip_open_external">Откройте ссылку во внешнем браузере (в WhatsApp/Telegram → «Открыть в браузере»).</li>
+        <li data-i18n="howto.tip_mic">Разрешите доступ к микрофону.</li>
+        <li data-i18n="howto.tip_https">Проверьте, что сайт открыт по HTTPS.</li>
       </ul>
     </div>
   </dialog>
@@ -164,13 +173,14 @@
   <!-- Диалог: О программе -->
   <dialog id="dlgAbout">
     <div class="dlg-head">
-      <strong>ℹ️ О программе</strong>
+      <strong data-i18n="menu.about">ℹ️ О программе</strong>
       <button class="ghost" onclick="this.closest('dialog').close()">✖</button>
     </div>
     <div class="dlg-body">
-      <p><b>Звонилка Каплинского</b> — маленький и скромный бесплатный проект-хобби, родившийся с помощью AI после массовых блокировок связи через WhatsApp и Telegram в России. Цель — простая и надёжная голосовая связь прямо в браузере.</p>
-      <p>Разговоры <b>не записываются</b> и никому не передаются — <b>это я гарантирую</b>. Технически запись на сервере не реализована.</p>
-      <p>Связаться со мной: <a class="link" href="mailto:mail@zababba.com">mail@zababba.com</a></p>
+      <p data-i18n="about.lead">Звонилка Каплинского — маленький и скромный бесплатный проект-хобби. Цель — простая и надёжная голосовая связь прямо в браузере.</p>
+      <p data-i18n="about.privacy1">Разговоры не записываются и никому не передаются.</p>
+      <p data-i18n="about.privacy2">Технически запись на сервере не реализована.</p>
+      <p><span data-i18n="about.contact_label">Связаться со мной:</span> <a class="link" href="mailto:mail@zababba.com">mail@zababba.com</a></p>
     </div>
   </dialog>
 
