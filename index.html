@@ -195,6 +195,16 @@
   <script src="/config.js"
           onerror="window.__APP_CONFIG__={SERVER_URL:'https://call.zababba.com/signal',WS_URL:'wss://call.zababba.com/ws'}"></script>
 
+<!-- shim: защитить от падения, пока модуль не инициализировался -->
+<script>
+  window.logT ||= function(level, key, extras){
+    try {
+      const msg = (window.i18next && i18next.t) ? i18next.t(key, extras) : (key||'');
+      (window.addLog ? window.addLog : console.log)(level||'info', msg);
+    } catch(e) {}
+  };
+</script>
+
 <!-- было 4 тега /public/js/... -->
 <script type="module" src="/src/main.js"></script>
 
