@@ -83,7 +83,7 @@ function connectWS(role, roomId, onMessage) {
     let closedCleanly = false;
 
     const openSocket = () => {
-      const q = new URLSearchParams({ room: roomId, role }).toString();
+      const q = new URLSearchParams({ roomId: roomId, role }).toString();
       const url = `${CFG.WS_URL}?${q}`;
       window.addLog && window.addLog('signal', `connect WS ${url}`);
 
