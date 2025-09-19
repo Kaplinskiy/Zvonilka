@@ -151,6 +151,7 @@ function renderLangSwitch(active) {
 
   let roomId=null, memberId=null, role=null, pingTimer=null;
   let pendingOffer=null;
+  let offerAttempted = false;
 
   // --- Signaling message handler ---
   async function onSignal(msg){
@@ -161,6 +162,23 @@ function renderLangSwitch(active) {
           memberId = msg.memberId || memberId;
           setStatus(i18next.t('ws.connected_room', { room: (roomId||parseRoom()||'-') }), 'ok');
           logT('signal','debug.signal_recv_hello');
+          if (role === 'caller' && !offerAttempted) {
+            try {
+              if (typeof window.sendOfferIfPossible === 'function') {
+                await window.sendOfferIfPossible(true);
+                offerAttempted = true;
+                logT('webrtc','webrtc.offer_sent_caller');
+              } else if (typeof window.createAndSendOffer === 'function') {
+                await window.createAndSendOffer();
+                offerAttempted = true;
+                logT('webrtc','webrtc.offer_sent_via_helper');
+              } else {
+                logT('warn','warn.no_offer_sender_impl');
+              }
+            } catch(e) {
+              logT('error','error.offer_send_failed', { msg: (e?.message || String(e)) });
+            }
+          }
           break;
         }
         case 'member.joined': {
@@ -174,6 +192,28 @@ function renderLangSwitch(active) {
                 logT('webrtc','webrtc.offer_sent_caller');
               } else if (typeof window.createAndSendOffer === 'function') {
                 await window.createAndSendOffer();
+                logT('webrtc','webrtc.offer_sent_via_helper');
+              } else {
+                logT('warn','warn.no_offer_sender_impl');
+              }
+            }
+          } catch (e) {
+            logT('error','error.offer_send_failed', { msg: (e?.message || String(e)) });
+          }
+          break;
+        }
+        case 'joined':
+        case 'peer.joined': {
+          // Treat as member.joined
+          try {
+            if (role === 'caller' && !offerAttempted) {
+              if (typeof window.sendOfferIfPossible === 'function') {
+                await window.sendOfferIfPossible(true);
+                offerAttempted = true;
+                logT('webrtc','webrtc.offer_sent_caller');
+              } else if (typeof window.createAndSendOffer === 'function') {
+                await window.createAndSendOffer();
+                offerAttempted = true;
                 logT('webrtc','webrtc.offer_sent_via_helper');
               } else {
                 logT('warn','warn.no_offer_sender_impl');
@@ -245,6 +285,7 @@ function renderLangSwitch(active) {
     if (shareWrap) shareWrap.classList.add('hidden');
     setStatus(i18next.t('call.ended'),'warn-txt');
     if (noteEl) noteEl.textContent = '';
+    offerAttempted = false;
   }
 
   // --- URL init ---
