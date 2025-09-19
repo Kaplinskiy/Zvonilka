@@ -62,6 +62,9 @@
   "status.closed": "Connection closed",
   "status.lost_recovering": "Connection lost, trying to recover…",
 
+  "role.caller": "Mode: caller",
+  "role.callee": "Mode: callee",
+
   "signal.recovering": "Restoring signaling…",
   "signal.waiting_offer": "Waiting for offer…",
 

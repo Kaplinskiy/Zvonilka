@@ -62,6 +62,9 @@
   "status.closed": "החיבור נסגר",
   "status.lost_recovering": "החיבור אבד, מנסה לשחזר…",
 
+  "role.caller": "מצב: יוזם",
+  "role.callee": "מצב: נמען",
+
   "signal.recovering": "משחזר אותות…",
   "signal.waiting_offer": "ממתין להצעה…",
 

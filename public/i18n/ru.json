@@ -62,6 +62,9 @@
   "status.closed": "соединение закрыто",
   "status.lost_recovering": "соединение потеряно, пытаемся восстановить…",
 
+  "role.caller": "Режим: инициатор",
+  "role.callee": "Режим: отвечающий",
+
   "signal.recovering": "восстанавливаем сигналинг…",
   "signal.waiting_offer": "ждём оффер…",
 

@@ -91,7 +91,7 @@ function renderLangSwitch(active) {
   // --- DOM ---
   const statusEl = document.getElementById('status');
   const noteEl   = document.getElementById('note');
-  const roomNote = document.getElementById('roomNote');
+  const roleBadge = document.getElementById('roleBadge');
   const audioEl  = document.getElementById('remoteAudio');
 
   const btnCall   = document.getElementById('btnCall');
@@ -122,6 +122,12 @@ function renderLangSwitch(active) {
       }
     } catch (_) {}
   };
+  function setRoleLabel(isCaller) {
+    if (!roleBadge) return;
+    const key = isCaller ? 'role.caller' : 'role.callee';
+    roleBadge.setAttribute('data-i18n', key);
+    roleBadge.textContent = i18next.t(key);
+  }
   const renderEnv   = window.renderEnv   || (()=>{});
   const addLog      = window.addLog      || (()=>{});
   const parseRoom   = window.parseRoom   || (() => new URLSearchParams(location.search).get('room'));
@@ -154,7 +160,6 @@ function renderLangSwitch(active) {
         case 'hello': {
           memberId = msg.memberId || memberId;
           setStatus(`WS подключён. Комната ${roomId||parseRoom()||'-'}`, 'ok');
-          roomNote && (roomNote.textContent = `Комната: ${roomId||parseRoom()||'-'}`);
           addLog('signal','recv hello');
           break;
         }
@@ -184,7 +189,7 @@ function renderLangSwitch(active) {
           pendingOffer = msg.payload || msg.offer || null;
           if (pendingOffer) {
             btnAnswer && btnAnswer.classList.remove('hidden');
-            setStatus('получен оффер — нажмите «Ответить на звонок»','warn');
+            setStatus(i18next.t('call.offer_received_click_answer'),'warn');
           }
           break;
         }
@@ -217,11 +222,11 @@ function renderLangSwitch(active) {
 
   async function startCaller(){
     if (waitWSOpen) await waitWSOpen(3000);
-    setStatus('подготовка…','warn-txt');
+    setStatus(i18next.t('status.preparing'),'warn-txt');
     btnCall && (btnCall.disabled = true);
     await getMic();
     createPC((s)=>{ if (audioEl) audioEl.srcObject = s; addLog('webrtc','remote track'); });
-    setStatus('Комната готова. Поделитесь ссылкой или ждите входа собеседника','ok');
+    setStatus(i18next.t('room.ready_share_link'),'ok');
     if (btnHang) btnHang.disabled = false;
   }
 
@@ -237,7 +242,7 @@ function renderLangSwitch(active) {
     if (btnCall) btnCall.classList.toggle('hidden', hasRoom);
     if (btnAnswer) btnAnswer.classList.toggle('hidden', !hasRoom);
     if (shareWrap) shareWrap.classList.add('hidden');
-    setStatus('звонок завершён','warn-txt');
+    setStatus(i18next.t('call.ended'),'warn-txt');
     if (noteEl) noteEl.textContent = '';
   }
 
@@ -246,15 +251,15 @@ function renderLangSwitch(active) {
     const rid = parseRoom();
     if (!rid) {
       addLog('info','нет room в URL — это Caller');
-      setStatus('Готов','ok');
-      roomNote && (roomNote.textContent='Режим: инициатор');
+      setStatus(i18next.t('common.ready'),'ok');
+      setRoleLabel(true);
       return;
     }
-    roomNote && (roomNote.textContent = `Комната: ${rid}`);
     role = 'callee';
     roomId = rid;
     await connectWS('callee', rid, onSignal);
-    setStatus('WS подключён, ждём оффер','ok');
+    setRoleLabel(false);
+    setStatus(i18next.t('ws.waiting_offer'),'ok');
     if (btnAnswer) btnAnswer.classList.remove('hidden');
     if (btnCall) btnCall.classList.add('hidden');
   }
@@ -263,17 +268,17 @@ function renderLangSwitch(active) {
   if (btnCall) btnCall.onclick = async () => {
     try {
       btnCall.disabled = true;
-      setStatus('Создаём комнату…','warn');
+      setStatus(i18next.t('status.preparing'),'warn');
       const resp = await apiCreateRoom(SERVER_URL);
       roomId = (resp && resp.roomId) || null;
       role = 'caller';
       await connectWS('caller', roomId, onSignal);
       shareRoomLink(roomId);
       await startCaller();
-      setStatus('Комната готова. Поделитесь ссылкой или ждите входа собеседника','ok');
+      setStatus(i18next.t('room.ready_share_link'),'ok');
       if (btnHang) btnHang.disabled = false;
     } catch(e){
-      setStatus('ошибка создания комнаты','err');
+      setStatus(i18next.t('error.room_create_failed'),'err');
       addLog('error', e && e.message ? e.message : String(e));
       if (noteEl) noteEl.textContent = e && e.message ? e.message : String(e);
       btnCall.disabled = false;
@@ -282,7 +287,7 @@ function renderLangSwitch(active) {
 
   if (btnAnswer) btnAnswer.onclick = async () => {
     const rid = parseRoom();
-    if (!rid) { alert('Откройте приглашение с ?room=…'); addLog('warn','btnAnswer без room'); return; }
+    if (!rid) { alert(i18next.t('room.open_invite_with_param')); addLog('warn','btnAnswer без room'); return; }
     role = 'callee'; roomId = rid;
 
     if (!isWSOpen()) await connectWS('callee', rid, onSignal);
@@ -294,7 +299,7 @@ function renderLangSwitch(active) {
       if (btnHang) btnHang.disabled = false;
     } else {
       addLog('warn','btnAnswer без оффера');
-      setStatus('ждём оффер…','warn');
+      setStatus(i18next.t('signal.waiting_offer'),'warn');
     }
   };
 
@@ -302,13 +307,21 @@ function renderLangSwitch(active) {
 
   if (btnNativeShare) btnNativeShare.onclick = () => {
     const txt = (shareLinkEl && shareLinkEl.value) || '';
-    if (navigator.share) navigator.share({ title:'Приглашение на звонок', text:`Вам звонят: ${txt}`, url: txt }).catch(()=>{});
-    else if (noteEl) noteEl.textContent = 'Native Share недоступен';
+    if (navigator.share) navigator.share({
+      title: i18next.t('dialog.invite_title'),
+      text: i18next.t('call.offer_received_click_answer') + ' ' + txt,
+      url: txt
+    }).catch(()=>{});
+    else if (noteEl) noteEl.textContent = i18next.t('share.native_unavailable');
   };
 
   if (btnCopy) btnCopy.onclick = async () => {
-    try { await navigator.clipboard.writeText((shareLinkEl && shareLinkEl.value) || ''); if (noteEl) noteEl.textContent='Ссылка скопирована'; }
-    catch { if (noteEl) noteEl.textContent='Скопируйте вручную'; }
+    try {
+      await navigator.clipboard.writeText((shareLinkEl && shareLinkEl.value) || '');
+      if (noteEl) noteEl.textContent = i18next.t('common.link_copied');
+    } catch {
+      if (noteEl) noteEl.textContent = i18next.t('common.will_be_generated');
+    }
   };
 
   if (btnCopyDiag) btnCopyDiag.onclick = async () => {
@@ -328,7 +341,7 @@ function renderLangSwitch(active) {
   };
 
   // --- Boot ---
-  setStatus('инициализация…');
+  setStatus(i18next.t('status.initializing'));
   try { renderEnv(); } catch {}
   addLog('info','Клиент загружен (Vite dev, TURN relay policy из config.js)');
   initByUrl();
