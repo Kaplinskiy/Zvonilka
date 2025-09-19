@@ -159,33 +159,33 @@ function renderLangSwitch(active) {
       switch (msg.type){
         case 'hello': {
           memberId = msg.memberId || memberId;
-          setStatus(`WS подключён. Комната ${roomId||parseRoom()||'-'}`, 'ok');
-          addLog('signal','recv hello');
+          setStatus(i18next.t('ws.connected_room', { room: (roomId||parseRoom()||'-') }), 'ok');
+          logT('signal','debug.signal_recv_hello');
           break;
         }
         case 'member.joined': {
-          addLog('signal','recv member.joined');
+          logT('signal','debug.signal_recv_member_joined');
           // ВАЖНО: если мы инициатор (caller), отправляем оффер сразу после входа второго участника.
           // Раньше это делал инлайн-скрипт; после рефакторинга вызов потерялся.
           try {
             if (role === 'caller') {
               if (typeof window.sendOfferIfPossible === 'function') {
                 await window.sendOfferIfPossible(true); // force
-                addLog('webrtc','offer sent (caller)');
+                logT('webrtc','webrtc.offer_sent_caller');
               } else if (typeof window.createAndSendOffer === 'function') {
                 await window.createAndSendOffer();
-                addLog('webrtc','offer sent via createAndSendOffer');
+                logT('webrtc','webrtc.offer_sent_via_helper');
               } else {
-                addLog('warn','no offer sender impl (sendOfferIfPossible/createAndSendOffer)');
+                logT('warn','warn.no_offer_sender_impl');
               }
             }
           } catch (e) {
-            addLog('error','sendOfferIfPossible: ' + (e?.message || e));
+            logT('error','error.offer_send_failed', { msg: (e?.message || String(e)) });
           }
           break;
         }
         case 'offer': {
-          addLog('signal','recv offer');
+          logT('signal','debug.signal_recv_offer');
           pendingOffer = msg.payload || msg.offer || null;
           if (pendingOffer) {
             btnAnswer && btnAnswer.classList.remove('hidden');
@@ -194,23 +194,23 @@ function renderLangSwitch(active) {
           break;
         }
         case 'answer': {
-          addLog('signal','recv answer');
-          if (msg.payload) { try { await applyAnswer(msg.payload); } catch(e) { addLog('error','applyAnswer: '+(e.message||e)); } }
+          logT('signal','debug.signal_recv_answer');
+          if (msg.payload) { try { await applyAnswer(msg.payload); } catch(e) { logT('error','error.apply_answer', { msg: (e?.message || String(e)) }); } }
           break;
         }
         case 'ice': {
           const c = msg.payload || msg.candidate;
-          if (c) { try { await addRemoteIce(c); } catch(e) { addLog('error','addRemoteIce: '+(e.message||e)); } }
+          if (c) { try { await addRemoteIce(c); } catch(e) { logT('error','error.add_remote_ice', { msg: (e?.message || String(e)) }); } }
           break;
         }
         case 'bye': {
-          addLog('signal','recv bye');
+          logT('signal','debug.signal_recv_bye');
           doCleanup('peer-bye');
           break;
         }
         default: break;
       }
-    } catch(e){ addLog('error','onSignal: '+(e.message||e)); }
+    } catch(e){ logT('error','onSignal: '+(e.message||e)); }
   }
 
   function shareRoomLink(rid){
@@ -225,7 +225,7 @@ function renderLangSwitch(active) {
     setStatus(i18next.t('status.preparing'),'warn-txt');
     btnCall && (btnCall.disabled = true);
     await getMic();
-    createPC((s)=>{ if (audioEl) audioEl.srcObject = s; addLog('webrtc','remote track'); });
+    createPC((s)=>{ if (audioEl) audioEl.srcObject = s; logT('webrtc','webrtc.remote_track'); });
     setStatus(i18next.t('room.ready_share_link'),'ok');
     if (btnHang) btnHang.disabled = false;
   }
@@ -250,7 +250,7 @@ function renderLangSwitch(active) {
   async function initByUrl(){
     const rid = parseRoom();
     if (!rid) {
-      addLog('info','нет room в URL — это Caller');
+      logT('info','debug.no_room_param_caller');
       setStatus(i18next.t('common.ready'),'ok');
       setRoleLabel(true);
       return;
@@ -279,7 +279,7 @@ function renderLangSwitch(active) {
       if (btnHang) btnHang.disabled = false;
     } catch(e){
       setStatus(i18next.t('error.room_create_failed'),'err');
-      addLog('error', e && e.message ? e.message : String(e));
+      logT('error','error.room_create_failed');
       if (noteEl) noteEl.textContent = e && e.message ? e.message : String(e);
       btnCall.disabled = false;
     }
@@ -287,18 +287,18 @@ function renderLangSwitch(active) {
 
   if (btnAnswer) btnAnswer.onclick = async () => {
     const rid = parseRoom();
-    if (!rid) { alert(i18next.t('room.open_invite_with_param')); addLog('warn','btnAnswer без room'); return; }
+    if (!rid) { alert(i18next.t('room.open_invite_with_param')); logT('warn','warn.ws_already_connected_callee'); return; }
     role = 'callee'; roomId = rid;
 
     if (!isWSOpen()) await connectWS('callee', rid, onSignal);
-    else addLog('warn','WS уже подключён (callee)');
+    else logT('warn','warn.ws_already_connected_callee');
 
     if (pendingOffer) {
-      await acceptIncoming(pendingOffer, (s)=>{ if (audioEl) audioEl.srcObject = s; addLog('webrtc','remote track'); });
+      await acceptIncoming(pendingOffer, (s)=>{ if (audioEl) audioEl.srcObject = s; logT('webrtc','webrtc.remote_track'); });
       pendingOffer = null;
       if (btnHang) btnHang.disabled = false;
     } else {
-      addLog('warn','btnAnswer без оффера');
+      logT('warn','btnAnswer без оффера');
       setStatus(i18next.t('signal.waiting_offer'),'warn');
     }
   };
@@ -343,7 +343,7 @@ function renderLangSwitch(active) {
   // --- Boot ---
   setStatus(i18next.t('status.initializing'));
   try { renderEnv(); } catch {}
-  addLog('info','Клиент загружен (Vite dev, TURN relay policy из config.js)');
+  logT('info','dev.client_loaded_vite');
   initByUrl();
 
   // Выставим видимость кнопок при загрузке

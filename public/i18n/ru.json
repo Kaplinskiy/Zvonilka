@@ -61,8 +61,6 @@
   "status.connected": "соединение установлено",
   "status.closed": "соединение закрыто",
   "status.lost_recovering": "соединение потеряно, пытаемся восстановить…",
-  "status.connected": "соединение установлено",
-  "status.lost_recovering": "соединение потеряно, пытаемся восстановить…",
 
   "role.caller": "Режим: инициатор",
   "role.callee": "Режим: отвечающий",
@@ -87,5 +85,21 @@
   "offline.no_internet": "Нет подключения к интернету",
   "offline.hint": "Чтобы позвонить, нужно восстановить соединение. Проверьте сеть и обновите страницу.",
 
-  "dialog.invite_title": "Приглашение на звонок"
+  "dialog.invite_title": "Приглашение на звонок",
+
+  "ws.connected_room": "WS подключён. Комната {{room}}",
+  "debug.signal_recv_hello": "получен hello",
+  "debug.signal_recv_member_joined": "получен member.joined",
+  "webrtc.offer_sent_caller": "отправлен оффер (инициатор)",
+  "webrtc.offer_sent_via_helper": "отправлен оффер через createAndSendOffer",
+  "warn.no_offer_sender_impl": "нет реализации отправки оффера",
+  "error.offer_send_failed": "ошибка отправки оффера: {{msg}}",
+  "debug.signal_recv_offer": "получен offer",
+  "debug.signal_recv_answer": "получен answer",
+  "error.apply_answer": "ошибка применения answer: {{msg}}",
+  "error.add_remote_ice": "ошибка добавления ICE: {{msg}}",
+  "debug.signal_recv_bye": "получен bye",
+  "debug.no_room_param_caller": "нет room в URL — режим инициатор",
+  "warn.ws_already_connected_callee": "WS уже подключён (callee)",
+  "webrtc.remote_track": "получен удалённый трек"
 }
