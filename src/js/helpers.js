@@ -28,7 +28,7 @@
   }
 
   function __parseRoom(){
-    return new URL(location.href).searchParams.get('room');
+    return new URL(location.href).searchParams.get('roomId');
   }
 
   function __detectInApp(){

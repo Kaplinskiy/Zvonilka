@@ -130,7 +130,7 @@ function renderLangSwitch(active) {
   }
   const renderEnv   = window.renderEnv   || (()=>{});
   const addLog      = window.addLog      || (()=>{});
-  const parseRoom   = window.parseRoom   || (() => new URLSearchParams(location.search).get('room'));
+  const parseRoom   = window.parseRoom   || (() => new URLSearchParams(location.search).get('roomId'));
   const connectWS   = window.connectWS   || (async()=>{});
   const wsSend      = window.wsSend      || (()=>{});
   const wsClose     = window.wsClose     || (()=>{});
@@ -216,7 +216,7 @@ function renderLangSwitch(active) {
   function shareRoomLink(rid){
     const safeId = String(rid||'').replace(/[^A-Za-z0-9_-]/g,'');
     const base = location.origin + location.pathname;
-    const link = `${base}?room=${encodeURIComponent(safeId)}`;
+    const link = `${base}?roomId=${encodeURIComponent(safeId)}`;
     if (shareLinkEl) shareLinkEl.value = link;
     if (shareWrap) shareWrap.classList.remove('hidden');
   }
@@ -298,7 +298,7 @@ function renderLangSwitch(active) {
     if (!rid) { alert(i18next.t('room.open_invite_with_param')); logT('warn','warn.ws_already_connected_callee'); return; }
     role = 'callee'; roomId = rid;
 
-    if (!isWSOpen()) await connectWS('callee', rid, onSignal);
+    if (!isWSOpen()) await connectWS('callee', roomId, onSignal);
     else logT('warn','warn.ws_already_connected_callee');
 
     if (pendingOffer) {
