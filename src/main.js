@@ -279,7 +279,7 @@ function renderLangSwitch(active) {
     try {
       btnCall.disabled = true;
       setStatus(i18next.t('status.preparing'),'warn');
-      const resp = await apiCreateRoom(SERVER_URL);
+      const resp = await apiCreateRoom();
       // Accept several server response shapes
       let rawId = (resp && (resp.roomId || resp.room || resp.id)) || null;
       // Fallback: parse from invite/url/href if provided
