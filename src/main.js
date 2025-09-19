@@ -214,15 +214,7 @@ function renderLangSwitch(active) {
   }
 
   function shareRoomLink(rid){
-    let id = String(rid||'');
-    // If a full URL was passed, try to extract ?room=...
-    if (/^https?:/i.test(id)) {
-      try {
-        const u = new URL(id);
-        id = u.searchParams.get('room') || id;
-      } catch {}
-    }
-    const safeId = id.replace(/[^A-Za-z0-9_-]/g,'');
+    const safeId = String(rid||'').replace(/[^A-Za-z0-9_-]/g,'');
     const base = location.origin + location.pathname;
     const link = `${base}?room=${encodeURIComponent(safeId)}`;
     if (shareLinkEl) shareLinkEl.value = link;
@@ -267,7 +259,7 @@ function renderLangSwitch(active) {
     role = 'callee';
     roomId = rid;
     roomId = roomId ? String(roomId).replace(/[^A-Za-z0-9_-]/g,'') : roomId;
-    await connectWS('callee', rid, onSignal);
+    await connectWS('callee', roomId, onSignal);
     setRoleLabel(false);
     setStatus(i18next.t('ws.waiting_offer'),'ok');
     if (btnAnswer) btnAnswer.classList.remove('hidden');
@@ -280,19 +272,13 @@ function renderLangSwitch(active) {
       btnCall.disabled = true;
       setStatus(i18next.t('status.preparing'),'warn');
       const resp = await apiCreateRoom();
-      // Accept several server response shapes
-      let rawId = (resp && (resp.roomId || resp.room || resp.id)) || null;
-      // Fallback: parse from invite/url/href if provided
-      if (!rawId && resp) {
-        const inviteUrl = resp.invite || resp.url || resp.href || '';
-        if (inviteUrl) {
-          try {
-            const u = new URL(inviteUrl);
-            rawId = u.searchParams.get('room');
-          } catch {}
-        }
-      }
+      const rawId = (resp && (resp.roomId || resp.room || resp.id)) || null;
       roomId = rawId ? String(rawId).replace(/[^A-Za-z0-9_-]/g,'') : null;
+      if (!roomId) {
+        setStatus(i18next.t('error.room_create_failed'),'err');
+        btnCall.disabled = false;
+        return;
+      }
       role = 'caller';
       await connectWS('caller', roomId, onSignal);
       shareRoomLink(roomId);
@@ -320,7 +306,7 @@ function renderLangSwitch(active) {
       pendingOffer = null;
       if (btnHang) btnHang.disabled = false;
     } else {
-      logT('warn','btnAnswer без оффера');
+      logT('warn','error.btnanswer_no_offer');
       setStatus(i18next.t('signal.waiting_offer'),'warn');
     }
   };
