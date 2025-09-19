@@ -214,8 +214,9 @@ function renderLangSwitch(active) {
   }
 
   function shareRoomLink(rid){
+    const safeId = String(rid||'').replace(/[^A-Za-z0-9_-]/g,'');
     const base = location.origin + location.pathname;
-    const link = `${base}?room=${encodeURIComponent(rid)}`;
+    const link = `${base}?room=${encodeURIComponent(safeId)}`;
     if (shareLinkEl) shareLinkEl.value = link;
     if (shareWrap) shareWrap.classList.remove('hidden');
   }
@@ -270,7 +271,8 @@ function renderLangSwitch(active) {
       btnCall.disabled = true;
       setStatus(i18next.t('status.preparing'),'warn');
       const resp = await apiCreateRoom(SERVER_URL);
-      roomId = (resp && resp.roomId) || null;
+      const rawId = (resp && (resp.roomId || resp.room || resp.id)) || null;
+      roomId = rawId ? String(rawId).replace(/[^A-Za-z0-9_-]/g,'') : null;
       role = 'caller';
       await connectWS('caller', roomId, onSignal);
       shareRoomLink(roomId);
