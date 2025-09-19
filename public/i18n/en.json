@@ -61,6 +61,8 @@
   "status.connected": "Connection established",
   "status.closed": "Connection closed",
   "status.lost_recovering": "Connection lost, trying to recover…",
+  "status.connected": "Connection established",
+  "status.lost_recovering": "Connection lost, trying to recover…",
 
   "role.caller": "Mode: caller",
   "role.callee": "Mode: callee",

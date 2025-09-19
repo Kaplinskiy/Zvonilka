@@ -1,5 +1,3 @@
-
-
 // public/js/webrtc.js
 // WebRTC логика. Публикует функции в window для использования в index.html.
 // Подключается до большого inline-скрипта.
@@ -11,6 +9,11 @@
   let offerSent = false;
   let remoteDescApplied = false;
   let pendingRemoteICE = [];
+
+  function t(key, fallback) {
+    try { return (window.i18next && window.i18next.t) ? window.i18next.t(key) : (fallback || key); }
+    catch { return fallback || key; }
+  }
 
   function getPC(){ return pc; }
 
@@ -89,13 +92,13 @@
         window.addLog && window.addLog('webrtc', `ice=${st}`);
         if (typeof window.setStatus === 'function') {
             if (st === 'connected') {
-            window.setStatus('соединение установлено','ok');
+            window.setStatus(t('status.connected','соединение установлено'),'ok');
             } else if (st === 'checking') {
-            window.setStatus('соединяемся…','warn');
+            window.setStatus(t('status.connecting','соединяемся…'),'warn');
             } else if (st === 'disconnected') {
-            window.setStatus('соединение потеряно, пытаемся восстановить…','warn');
+            window.setStatus(t('status.lost_recovering','соединение потеряно, пытаемся восстановить…'),'warn');
             } else if (st === 'failed') {
-            window.setStatus('ошибка соединения','err');
+            window.setStatus(t('error.connection','ошибка соединения'),'err');
             }
         }
     };
@@ -105,15 +108,15 @@
         window.addLog && window.addLog('webrtc', `state=${st}`);
         if (typeof window.setStatus === 'function') {
             if (st === 'connected') {
-            window.setStatus('соединение установлено','ok');
+            window.setStatus(t('status.connected','соединение установлено'),'ok');
             } else if (st === 'connecting') {
-            window.setStatus('соединяемся…','warn');
+            window.setStatus(t('status.connecting','соединяемся…'),'warn');
             } else if (st === 'disconnected') {
-            window.setStatus('соединение потеряно, пытаемся восстановить…','warn');
+            window.setStatus(t('status.lost_recovering','соединение потеряно, пытаемся восстановить…'),'warn');
             } else if (st === 'failed') {
-            window.setStatus('ошибка соединения','err');
+            window.setStatus(t('error.connection','ошибка соединения'),'err');
             } else if (st === 'closed') {
-            window.setStatus('соединение закрыто','warn');
+            window.setStatus(t('status.closed','соединение закрыто'),'warn');
             }
         }
     };

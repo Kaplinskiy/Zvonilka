@@ -14,6 +14,12 @@
   let _ws = null;
   let _pingTimer = null;
 
+  // Lightweight i18n accessor that works if i18next is on window
+  function t(key, fallback) {
+    try { return (window.i18next && window.i18next.t) ? window.i18next.t(key) : (fallback || key); }
+    catch { return fallback || key; }
+  }
+
   function isWSOpen() {
     return !!(_ws && _ws.readyState === WebSocket.OPEN);
     }
@@ -30,7 +36,7 @@
         }
         if (Date.now() - started >= timeoutMs) {
           clearInterval(timer);
-          reject(new Error('WS не подключён'));
+          reject(new Error(t('ws.disconnected', 'WS not connected')));
         }
       }, 50);
     });
@@ -135,7 +141,7 @@ function connectWS(role, roomId, onMessage) {
           attempt += 1;
           const delay = Math.min(500 * 2 ** (attempt - 1), maxDelay);
           if (typeof window.setStatus === 'function') {
-            window.setStatus('восстанавливаем сигналинг…', 'warn');
+            window.setStatus(t('signal.recovering', 'восстанавливаем сигналинг…'), 'warn');
           }
           window.addLog && window.addLog('signal', `ws reconnect in ${delay}ms (attempt ${attempt})`);
           setTimeout(() => {

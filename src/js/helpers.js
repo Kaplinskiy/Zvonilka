@@ -3,6 +3,14 @@
 // Каждая функция безопасно публикуется в window, не переопределяя уже существующие.
 
 (function(){
+  function __tMaybe(keyOrText) {
+    try {
+      if (window.i18next && window.i18next.t) {
+        return window.i18next.t(keyOrText);
+      }
+    } catch {}
+    return keyOrText;
+  }
   function __addLog(level, msg){
     const list = document.getElementById('logList');
     if (!list) return;
@@ -15,7 +23,7 @@
   function __setStatus(text, cls){
     const el = document.getElementById('status');
     if (!el) return;
-    el.textContent = text;
+    el.textContent = __tMaybe(text);
     el.className = cls || '';
   }
 

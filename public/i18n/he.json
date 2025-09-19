@@ -61,6 +61,8 @@
   "status.connected": "חיבור נוצר",
   "status.closed": "החיבור נסגר",
   "status.lost_recovering": "החיבור אבד, מנסה לשחזר…",
+  "status.connected": "חיבור נוצר",
+  "status.lost_recovering": "החיבור אבד, מנסה לשחזר…",
 
   "role.caller": "מצב: יוזם",
   "role.callee": "מצב: נמען",
