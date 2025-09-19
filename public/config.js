@@ -11,7 +11,7 @@ window.__APP_CONFIG__ = {
 async function loadTurnConfig() {
   try {
     const res = await fetch('/turn-credentials');
-    if (!res.ok) throw new Error('Failed to fetch turn-credentials');
+    if (!res.ok) throw new Error('TURN not available');
     const data = await res.json();
     window.__TURN__ = {
       iceServers: data.iceServers,
@@ -19,7 +19,7 @@ async function loadTurnConfig() {
     };
     console.log('TURN config loaded', window.__TURN__);
   } catch (e) {
-    console.error('TURN config error', e);
+    console.warn('TURN disabled, fallback to STUN only');
     // fallback на пустой список — WebRTC попробует прямое соединение
     window.__TURN__ = { iceServers: [], forceRelay: false };
   }
