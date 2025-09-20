@@ -1,4 +1,6 @@
 import { readFileSync } from 'node:fs';
+import { test, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 
 /**
  * Recursively collect translation keys from an object.
