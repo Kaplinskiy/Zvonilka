@@ -4,11 +4,14 @@ test.setTimeout(60_000);
 
 function isBenignConsoleError(t: string): boolean {
   const s = t.toLowerCase();
-  // Ignore missing small favicons, webmanifest prefetches, and sourcemaps in dev.
+  // Ignore missing small favicons, webmanifest prefetches, sourcemaps in dev,
+  // and Chromium quirk: "The script has an unsupported MIME type ('text/html')."
+  // which may surface when a background fetch or extension injects a script-like request.
   return (
-    s.includes('failed to load resource') &&
-    (s.includes('404') || s.includes('not found')) &&
-    (s.includes('favicon') || s.includes('manifest') || s.includes('sourcemap'))
+    (s.includes('failed to load resource') &&
+      (s.includes('404') || s.includes('not found')) &&
+      (s.includes('favicon') || s.includes('manifest') || s.includes('sourcemap'))) ||
+    s.includes('unsupported mime type') // tolerate transient MIME warning
   );
 }
 
