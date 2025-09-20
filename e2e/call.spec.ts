@@ -24,7 +24,9 @@ test('two tabs connect, no console errors, audio flowing', async ({ page, contex
   page.on('console', (msg) => {
     if (msg.type() === 'error') {
       const txt = msg.text();
-      if (!isBenignConsoleError(txt)) consoleErrorsA.push(txt);
+      const loc = msg.location();
+      const where = loc?.url ? ` @ ${loc.url}:${loc.lineNumber ?? 0}:${loc.columnNumber ?? 0}` : '';
+      if (!isBenignConsoleError(txt)) consoleErrorsA.push(txt + where);
     }
   });
   page.on('pageerror', (err) => pageErrorsA.push(String(err)));
@@ -50,7 +52,9 @@ test('two tabs connect, no console errors, audio flowing', async ({ page, contex
   pageB.on('console', (msg) => {
     if (msg.type() === 'error') {
       const txt = msg.text();
-      if (!isBenignConsoleError(txt)) consoleErrorsB.push(txt);
+      const loc = msg.location();
+      const where = loc?.url ? ` @ ${loc.url}:${loc.lineNumber ?? 0}:${loc.columnNumber ?? 0}` : '';
+      if (!isBenignConsoleError(txt)) consoleErrorsB.push(txt + where);
     }
   });
   pageB.on('pageerror', (err) => pageErrorsB.push(String(err)));
