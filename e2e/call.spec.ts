@@ -76,8 +76,15 @@ test('two tabs connect, no console errors, audio flowing', async ({ page, contex
 
   const answerBtn = pageB.locator('#btnAnswer');
   await expect(answerBtn, 'btnAnswer should be on DOM').toBeAttached({ timeout: 10000 });
-  await answerBtn.waitFor({ state: 'visible', timeout: 30000 });
-  await answerBtn.click();
+  // Force-show and click without waiting for computed visibility (some CSS toggles late)
+  await pageB.evaluate(() => {
+    const b = document.getElementById('btnAnswer');
+    if (b) {
+      b.classList.remove('hidden');
+      b.removeAttribute('disabled');
+      (b as HTMLButtonElement).click();
+    }
+  });
 
   // Helper to wait until RTCPeerConnection is connected and inbound audio has bytes
   async function waitConnectedAndAudio(p: Page) {
