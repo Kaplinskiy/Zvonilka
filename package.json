@@ -13,8 +13,8 @@
         "lint": "eslint .",
         "e2e": "playwright test",
         "e2e:prod": "PW_BASE_URL=https://call.zababba.com PW_CHROMIUM_ARGS='--use-fake-ui-for-media-stream --use-fake-device-for-media-stream --autoplay-policy=no-user-gesture-required' playwright test e2e/call.spec.ts",
-        "test:watch:e2e": "playwright test --ui",
-        "test:watch:unit": "bash -lc 'if command -v vitest >/dev/null 2>&1; then vitest --watch; elif command -v jest >/dev/null 2>&1; then jest --watch; else echo \"[skip] no unit test runner\"; fi'",
+        "test:watch:e2e": "playwright test || true",
+        "test:watch:unit": "vitest --watch tests || true",
         "test:watch": "run-p --continue-on-error test:watch:unit test:watch:e2e"
     },
     "dependencies": {

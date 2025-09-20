@@ -153,6 +153,21 @@ function renderLangSwitch(active) {
     } catch (_) {}
   };
 
+  // Persisted status via i18n key. Re-applies on language change.
+  window.__STATUS_KEY = window.__STATUS_KEY || null;
+  const setStatusKey = (key, cls) => {
+    window.__STATUS_KEY = key || null;
+    const txt = key ? i18next.t(key) : '';
+    setStatus(txt, cls);
+  };
+  if (i18next && typeof i18next.on === 'function') {
+    i18next.on('languageChanged', () => {
+      try {
+        if (window.__STATUS_KEY) setStatus(i18next.t(window.__STATUS_KEY));
+      } catch {}
+    });
+  }
+
   /**
    * Set the user role label (caller or callee) for the UI badge.
    * @param {boolean} isCaller - True if the user is the caller.
@@ -319,7 +334,7 @@ function renderLangSwitch(active) {
    */
   async function startCaller() {
     if (waitWSOpen) await waitWSOpen(3000);
-    setStatus(i18next.t('status.preparing'), 'warn-txt');
+    setStatusKey('status.preparing', 'warn-txt');
     btnCall && (btnCall.disabled = true);
     await getMic();
     createPC((s) => {
@@ -379,7 +394,7 @@ function renderLangSwitch(active) {
   if (btnCall) btnCall.onclick = async () => {
     try {
       btnCall.disabled = true;
-      setStatus(i18next.t('status.preparing'), 'warn');
+      setStatusKey('status.preparing', 'warn');
       const resp = await apiCreateRoom();
       const rawId = (resp && (resp.roomId || resp.room || resp.id)) || null;
       roomId = rawId ? String(rawId).replace(/[^A-Za-z0-9_-]/g, '') : null;
@@ -470,7 +485,7 @@ function renderLangSwitch(active) {
   };
 
   // --- APPLICATION BOOTSTRAP SEQUENCE ---
-  setStatus(i18next.t('status.initializing'));
+  setStatusKey('status.initializing');
   try { renderEnv(); } catch {}
   logT('info', 'dev.client_loaded_vite');
   initByUrl();
