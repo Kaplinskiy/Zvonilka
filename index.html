@@ -4,7 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Звонилка Каплинского</title>
-  <!-- Meta: PWA / Social / SEO -->
+
+  <!--
+    App meta
+    - PWA, Social, SEO metadata used by search engines and link previews.
+    - Keep `theme-color` in sync with the top-level background color.
+  -->
   <meta name="theme-color" content="#0b0f14">
   <meta name="description" content="Простой и надёжный веб‑звонок через WebRTC. Работает даже в ограниченных сетях (TURN 443/TCP).">
   <meta property="og:type" content="website">
@@ -15,12 +20,24 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Звонилка Каплинского">
   <meta name="twitter:description" content="Бесплатные голосовые звонки прямо в браузере. Работает даже при блокировках WhatsApp/Telegram.">
+
+  <!--
+    Icons and manifest
+    - Icons are served from /public/icons via Vite copying assets to the root.
+    - Keep `manifest.webmanifest` and listed icon sizes consistent with /public/icons.
+  -->
   <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png">
   <link rel="icon" type="image/png" sizes="96x96" href="/icons/favicon-96x96.png">
   <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <link rel="manifest" href="/manifest.webmanifest">
+
+  <!--
+    Minimal in-page CSS
+    - Kept inline to avoid FOUC and reduce early network waterfalls.
+    - Consider extracting to a CSS file if this grows substantially.
+  -->
   <style>
     :root{
       --bg:#0b0f14;--fg:#e8f0fe;--muted:#9fb0c2;--card:#111826;
@@ -87,9 +104,16 @@
   </style>
 </head>
 <body>
+  <!--
+    Main application layout:
+    - Top status bar + language switch + quick actions
+    - Controls panel (call/answer/hangup + invite sharing)
+    - Debug panel (hidden by default)
+  -->
   <div class="wrap">
     <h1 data-i18n="app.brand">📞 Звонилка Каплинского</h1>
 
+    <!-- Status and language switch card -->
     <div class="card">
       <div class="topline">
         <div class="status-area">
@@ -107,10 +131,11 @@
 
       <div id="note" class="muted status-note" data-i18n="diag.checking_env">Проверяем окружение…</div>
 
+      <!-- Remote audio sink for incoming RTP audio track -->
       <audio id="remoteAudio" controls autoplay playsinline></audio>
     </div>
 
-    <!-- Панель управления -->
+    <!-- Controls: call start/answer/hangup and share link -->
     <div class="card controls">
       <div class="btnbar">
         <button id="btnCall"   class="primary big" data-i18n="btn.start_call">📞 Начать звонок</button>
@@ -131,7 +156,7 @@
       </div>
     </div>
 
-    <!-- Отладка -->
+    <!-- Debug block (hidden by default). Populate via JS when "Debug" is enabled. -->
     <div id="debugBlock" class="card hidden">
       <h3 style="margin-top:0" data-i18n="debug.title">Отладка</h3>
       <div class="kvs">
@@ -151,7 +176,7 @@
     </div>
   </div>
 
-  <!-- Диалог: Инструкция -->
+  <!-- Dialog: How-To guide -->
   <dialog id="dlgHowTo">
     <div class="dlg-head">
       <strong data-i18n="menu.howto">📘 Инструкция</strong>
@@ -178,7 +203,7 @@
     </div>
   </dialog>
 
-  <!-- Диалог: О программе -->
+  <!-- Dialog: About app -->
   <dialog id="dlgAbout">
     <div class="dlg-head">
       <strong data-i18n="menu.about">ℹ️ О программе</strong>
@@ -192,33 +217,48 @@
     </div>
   </dialog>
 
+  <!--
+    Runtime configuration
+    - /public/config.js populates `window.__APP_CONFIG__` with server URLs.
+    - The onerror fallback ensures sane defaults if config.js fails to load.
+  -->
   <script src="/config.js"
           onerror="window.__APP_CONFIG__={SERVER_URL:'https://call.zababba.com/signal',WS_URL:'wss://call.zababba.com/ws'}"></script>
 
-<!-- shim: защитить от падения, пока модуль не инициализировался -->
-<script>
-  window.logT ||= function(level, key, extras){
-    try {
-      const msg = (window.i18next && i18next.t) ? i18next.t(key, extras) : (key||'');
-      (window.addLog ? window.addLog : console.log)(level||'info', msg);
-    } catch(e) {}
-  };
-</script>
-
-<!-- было 4 тега /public/js/... -->
-<script type="module" src="/src/main.js"></script>
-
+  <!--
+    Logging shim
+    - Provides a stable `logT(level, key, extras)` until i18next/UI logger is ready.
+    - Avoids runtime errors if logging is called too early during bootstrap.
+  -->
   <script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js')
-        .then(() => { try{ addLog('info','SW registered'); }catch{} })
-        .catch((e) => { try{ addLog('error','SW register failed: '+(e.message||e)); }catch{} });
-    });
-  }
-  </script>                 
-  
-  
-  
+    window.logT ||= function(level, key, extras){
+      try {
+        const msg = (window.i18next && i18next.t) ? i18next.t(key, extras) : (key||'');
+        (window.addLog ? window.addLog : console.log)(level||'info', msg);
+      } catch(e) {}
+    };
+  </script>
+
+  <!--
+    Application entrypoint
+    - We use a single ES module to bootstrap i18n, signaling, and WebRTC logic.
+    - Historical /public/js/* tags were removed; Vite handles module graph bundling.
+  -->
+  <script type="module" src="/src/main.js"></script>
+
+  <!--
+    Service Worker registration
+    - Registers /sw.js on window load.
+    - Logs registration result to the in-app logger if available.
+  -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(() => { try{ addLog('info','SW registered'); }catch{} })
+          .catch((e) => { try{ addLog('error','SW register failed: '+(e.message||e)); }catch{} });
+      });
+    }
+  </script>
 </body>
 </html>

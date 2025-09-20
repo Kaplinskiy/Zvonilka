@@ -1,24 +1,34 @@
 // src/main.js
 import i18next from 'https://unpkg.com/i18next@23.11.5/dist/esm/i18next.js';
 import HttpBackend from 'https://unpkg.com/i18next-http-backend@2.6.2/esm/index.js';
-// Глобальные модули (они вешают API на window.*)
+// Import global modules (these attach APIs to the window object)
 import './js/helpers.js';
 import './js/signaling.js';
 import './js/webrtc.js';
 import './js/ui.js';
 
-// ---- BOOTSTRAP ----
+// ---- APPLICATION BOOTSTRAP AND INITIALIZATION ----
 const STORAGE_KEY = 'lang';
-const SUPPORTED = ['ru','en','he'];
+const SUPPORTED = ['ru', 'en', 'he'];
 const FALLBACK = 'en';
 
+/**
+ * Detect the preferred language for the user.
+ * Checks localStorage, then browser language, then falls back to default.
+ * @returns {string} The detected language code.
+ */
 function detectLang() {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved && SUPPORTED.includes(saved)) return saved;
-  const nav = (navigator.language || 'en').slice(0,2).toLowerCase();
+  const nav = (navigator.language || 'en').slice(0, 2).toLowerCase();
   return SUPPORTED.includes(nav) ? nav : FALLBACK;
 }
 
+/**
+ * Set the application's language.
+ * Updates localStorage, document direction, i18next, and updates the UI.
+ * @param {string} lng - Language code to set.
+ */
 export async function setLanguage(lng) {
   if (!SUPPORTED.includes(lng)) lng = FALLBACK;
   localStorage.setItem(STORAGE_KEY, lng);
@@ -28,6 +38,10 @@ export async function setLanguage(lng) {
   renderLangSwitch(lng);
 }
 
+/**
+ * Apply i18n translations to the DOM.
+ * Updates text content, placeholder, and title attributes based on translation keys.
+ */
 export function applyI18nToDOM() {
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const k = el.getAttribute('data-i18n');
@@ -43,6 +57,10 @@ export function applyI18nToDOM() {
   });
 }
 
+/**
+ * Initialize the i18n system and set up language switching.
+ * Loads translations via HttpBackend.
+ */
 async function initI18n() {
   const initialLng = detectLang();
   document.documentElement.dir = (initialLng === 'he') ? 'rtl' : 'ltr';
@@ -58,7 +76,7 @@ async function initI18n() {
       fallbackLng: FALLBACK,
       supportedLngs: SUPPORTED,
       backend: {
-        // В проде public = корень. Файлы лежат по /i18n/*.json
+        // In production, public is the root. Translation files are located at /i18n/*.json
         loadPath: '/i18n/{{lng}}.json'
       },
       interpolation: { escapeValue: false },
@@ -69,6 +87,11 @@ async function initI18n() {
   applyI18nToDOM();
 }
 
+/**
+ * Render the language switch buttons.
+ * Highlights the active language and attaches click handlers.
+ * @param {string} active - The currently active language code.
+ */
 function renderLangSwitch(active) {
   const root = document.getElementById('lang-switch');
   if (!root) return;
@@ -84,239 +107,284 @@ function renderLangSwitch(active) {
 }
 
 (function boot() {
+  // Prevent multiple initializations of the app.
   if (window.__CALL_APP_LOADED__) return;
   window.__CALL_APP_LOADED__ = true;
   initI18n();
 
-  // --- DOM ---
+  // --- DOM ELEMENTS ---
+  // Cache references to key DOM elements for later use.
   const statusEl = document.getElementById('status');
-  const noteEl   = document.getElementById('note');
+  const noteEl = document.getElementById('note');
   const roleBadge = document.getElementById('roleBadge');
-  const audioEl  = document.getElementById('remoteAudio');
+  const audioEl = document.getElementById('remoteAudio');
 
-  const btnCall   = document.getElementById('btnCall');
+  const btnCall = document.getElementById('btnCall');
   const btnAnswer = document.getElementById('btnAnswer');
-  const btnHang   = document.getElementById('btnHang');
+  const btnHang = document.getElementById('btnHang');
 
-  const shareWrap   = document.getElementById('shareWrap');
+  const shareWrap = document.getElementById('shareWrap');
   const shareLinkEl = document.getElementById('shareLink');
   const btnNativeShare = document.getElementById('btnNativeShare');
-  const btnCopy        = document.getElementById('btnCopy');
-  const btnCopyDiag    = document.getElementById('btnCopyDiag');
+  const btnCopy = document.getElementById('btnCopy');
+  const btnCopyDiag = document.getElementById('btnCopyDiag');
 
-  // --- Helpers from window (защита от отсутствия) ---
+  // --- GLOBAL HELPERS FROM WINDOW (provide fallbacks if missing) ---
+  /**
+   * Update the status display in the UI and call any global setStatus if present.
+   * @param {string} text - Status message to display.
+   * @param {string} cls - CSS class for status pill (e.g., 'ok', 'warn').
+   */
   const setStatus = (text, cls) => {
-    // 1) Локально обновляем DOM
+    // 1) Update the local DOM.
     if (statusEl) {
       statusEl.textContent = text;
       const pill = statusEl.closest('.pill') || statusEl.parentElement;
       if (pill && pill.classList) {
-        pill.classList.remove('ok','warn','warn-txt','err');
+        pill.classList.remove('ok', 'warn', 'warn-txt', 'err');
         if (cls) pill.classList.add(cls);
       }
     }
-    // 2) Совместимость: если есть глобальный setStatus — дергаем его тоже
+    // 2) Compatibility: also call global setStatus if it exists.
     try {
       if (typeof window.setStatus === 'function') {
         window.setStatus(text, cls);
       }
     } catch (_) {}
   };
+
+  /**
+   * Set the user role label (caller or callee) for the UI badge.
+   * @param {boolean} isCaller - True if the user is the caller.
+   */
   function setRoleLabel(isCaller) {
     if (!roleBadge) return;
     const key = isCaller ? 'role.caller' : 'role.callee';
     roleBadge.setAttribute('data-i18n', key);
     roleBadge.textContent = i18next.t(key);
   }
-  const renderEnv   = window.renderEnv   || (()=>{});
-  const addLog      = window.addLog      || (()=>{});
-  const parseRoom   = window.parseRoom   || (() => new URLSearchParams(location.search).get('roomId'));
-  const connectWS   = window.connectWS   || (async()=>{});
-  const wsSend      = window.wsSend      || (()=>{});
-  const wsClose     = window.wsClose     || (()=>{});
-  const isWSOpen    = window.isWSOpen    || (()=>false);
-  const waitWSOpen  = window.waitWSOpen  || (async()=>{});
-  const apiCreateRoom = window.apiCreateRoom || (async()=>{ throw new Error('apiCreateRoom missing'); });
 
-  const getMic      = window.getMic      || (async()=>{});
-  const createPC    = window.createPC    || (()=>{});
-  const acceptIncoming = window.acceptIncoming || (async()=>{});
-  const applyAnswer = window.applyAnswer || (async()=>{});
-  const addRemoteIce = window.addRemoteIce || (async()=>{});
-  const cleanupRTC  = window.cleanup     || (()=>{});
+  // Assign global helpers, falling back to no-ops if not present.
+  const renderEnv = window.renderEnv || (() => {});
+  const addLog = window.addLog || (() => {});
+  const parseRoom = window.parseRoom || (() => new URLSearchParams(location.search).get('roomId'));
+  const connectWS = window.connectWS || (async () => {});
+  const wsSend = window.wsSend || (() => {});
+  const wsClose = window.wsClose || (() => {});
+  const isWSOpen = window.isWSOpen || (() => false);
+  const waitWSOpen = window.waitWSOpen || (async () => {});
+  const apiCreateRoom = window.apiCreateRoom || (async () => { throw new Error('apiCreateRoom missing'); });
 
-  // --- State ---
+  const getMic = window.getMic || (async () => {});
+  const createPC = window.createPC || (() => {});
+  const acceptIncoming = window.acceptIncoming || (async () => {});
+  const applyAnswer = window.applyAnswer || (async () => {});
+  const addRemoteIce = window.addRemoteIce || (async () => {});
+  const cleanupRTC = window.cleanup || (() => {});
+
+  // --- STATE VARIABLES ---
+  // URLs for signaling and WebSocket, configurable via global config.
   const SERVER_URL = (window.__APP_CONFIG__ && window.__APP_CONFIG__.SERVER_URL) || `${location.origin}/signal`;
-  const WS_URL     = (window.__APP_CONFIG__ && window.__APP_CONFIG__.WS_URL)     || `${location.origin.replace(/^http/,'ws')}/ws`;
+  const WS_URL = (window.__APP_CONFIG__ && window.__APP_CONFIG__.WS_URL) || `${location.origin.replace(/^http/, 'ws')}/ws`;
 
-  let roomId=null, memberId=null, role=null, pingTimer=null;
-  let pendingOffer=null;
+  let roomId = null, memberId = null, role = null, pingTimer = null;
+  let pendingOffer = null;
   let offerAttempted = false;
 
-  // --- Signaling message handler ---
-  async function onSignal(msg){
-    try{
+  // --- SIGNALING MESSAGE HANDLER ---
+  /**
+   * Handle incoming signaling messages and update the app state accordingly.
+   * @param {object} msg - The signaling message object.
+   */
+  async function onSignal(msg) {
+    try {
       if (!msg || typeof msg !== 'object') return;
-      switch (msg.type){
+      switch (msg.type) {
         case 'hello': {
           memberId = msg.memberId || memberId;
-          setStatus(i18next.t('ws.connected_room', { room: (roomId||parseRoom()||'-') }), 'ok');
-          logT('signal','debug.signal_recv_hello');
+          setStatus(i18next.t('ws.connected_room', { room: (roomId || parseRoom() || '-') }), 'ok');
+          logT('signal', 'debug.signal_recv_hello');
+          // If user is the caller and offer hasn't been sent, send an offer.
           if (role === 'caller' && !offerAttempted) {
             try {
               if (typeof window.sendOfferIfPossible === 'function') {
                 await window.sendOfferIfPossible(true);
                 offerAttempted = true;
-                logT('webrtc','webrtc.offer_sent_caller');
+                logT('webrtc', 'webrtc.offer_sent_caller');
               } else if (typeof window.createAndSendOffer === 'function') {
                 await window.createAndSendOffer();
                 offerAttempted = true;
-                logT('webrtc','webrtc.offer_sent_via_helper');
+                logT('webrtc', 'webrtc.offer_sent_via_helper');
               } else {
-                logT('warn','warn.no_offer_sender_impl');
+                logT('warn', 'warn.no_offer_sender_impl');
               }
-            } catch(e) {
-              logT('error','error.offer_send_failed', { msg: (e?.message || String(e)) });
+            } catch (e) {
+              logT('error', 'error.offer_send_failed', { msg: (e?.message || String(e)) });
             }
           }
           break;
         }
         case 'member.joined': {
-          logT('signal','debug.signal_recv_member_joined');
-          // ВАЖНО: если мы инициатор (caller), отправляем оффер сразу после входа второго участника.
-          // Раньше это делал инлайн-скрипт; после рефакторинга вызов потерялся.
+          logT('signal', 'debug.signal_recv_member_joined');
+          // IMPORTANT: If we are the initiator (caller), send the offer immediately after the second participant joins.
+          // This was previously done by an inline script; now handled here.
           try {
             if (role === 'caller') {
               if (typeof window.sendOfferIfPossible === 'function') {
                 await window.sendOfferIfPossible(true); // force
-                logT('webrtc','webrtc.offer_sent_caller');
+                logT('webrtc', 'webrtc.offer_sent_caller');
               } else if (typeof window.createAndSendOffer === 'function') {
                 await window.createAndSendOffer();
-                logT('webrtc','webrtc.offer_sent_via_helper');
+                logT('webrtc', 'webrtc.offer_sent_via_helper');
               } else {
-                logT('warn','warn.no_offer_sender_impl');
+                logT('warn', 'warn.no_offer_sender_impl');
               }
             }
           } catch (e) {
-            logT('error','error.offer_send_failed', { msg: (e?.message || String(e)) });
+            logT('error', 'error.offer_send_failed', { msg: (e?.message || String(e)) });
           }
           break;
         }
         case 'joined':
         case 'peer.joined': {
-          // Treat as member.joined
+          // Treat as member.joined for compatibility.
           try {
             if (role === 'caller' && !offerAttempted) {
               if (typeof window.sendOfferIfPossible === 'function') {
                 await window.sendOfferIfPossible(true);
                 offerAttempted = true;
-                logT('webrtc','webrtc.offer_sent_caller');
+                logT('webrtc', 'webrtc.offer_sent_caller');
               } else if (typeof window.createAndSendOffer === 'function') {
                 await window.createAndSendOffer();
                 offerAttempted = true;
-                logT('webrtc','webrtc.offer_sent_via_helper');
+                logT('webrtc', 'webrtc.offer_sent_via_helper');
               } else {
-                logT('warn','warn.no_offer_sender_impl');
+                logT('warn', 'warn.no_offer_sender_impl');
               }
             }
           } catch (e) {
-            logT('error','error.offer_send_failed', { msg: (e?.message || String(e)) });
+            logT('error', 'error.offer_send_failed', { msg: (e?.message || String(e)) });
           }
           break;
         }
         case 'offer': {
-          logT('signal','debug.signal_recv_offer');
+          logT('signal', 'debug.signal_recv_offer');
           pendingOffer = msg.payload || msg.offer || null;
           if (pendingOffer) {
             btnAnswer && btnAnswer.classList.remove('hidden');
-            setStatus(i18next.t('call.offer_received_click_answer'),'warn');
+            setStatus(i18next.t('call.offer_received_click_answer'), 'warn');
           }
           break;
         }
         case 'answer': {
-          logT('signal','debug.signal_recv_answer');
-          if (msg.payload) { try { await applyAnswer(msg.payload); } catch(e) { logT('error','error.apply_answer', { msg: (e?.message || String(e)) }); } }
+          logT('signal', 'debug.signal_recv_answer');
+          if (msg.payload) {
+            try { await applyAnswer(msg.payload); }
+            catch (e) { logT('error', 'error.apply_answer', { msg: (e?.message || String(e)) }); }
+          }
           break;
         }
         case 'ice': {
           const c = msg.payload || msg.candidate;
-          if (c) { try { await addRemoteIce(c); } catch(e) { logT('error','error.add_remote_ice', { msg: (e?.message || String(e)) }); } }
+          if (c) {
+            try { await addRemoteIce(c); }
+            catch (e) { logT('error', 'error.add_remote_ice', { msg: (e?.message || String(e)) }); }
+          }
           break;
         }
         case 'bye': {
-          logT('signal','debug.signal_recv_bye');
+          logT('signal', 'debug.signal_recv_bye');
           doCleanup('peer-bye');
           break;
         }
         default: break;
       }
-    } catch(e){ logT('error','onSignal: '+(e.message||e)); }
+    } catch (e) { logT('error', 'onSignal: ' + (e.message || e)); }
   }
 
-  function shareRoomLink(rid){
-    const safeId = String(rid||'').replace(/[^A-Za-z0-9_-]/g,'');
+  /**
+   * Generate and display a shareable room link.
+   * @param {string} rid - Room ID to include in the link.
+   */
+  function shareRoomLink(rid) {
+    const safeId = String(rid || '').replace(/[^A-Za-z0-9_-]/g, '');
     const base = location.origin + location.pathname;
     const link = `${base}?roomId=${encodeURIComponent(safeId)}`;
     if (shareLinkEl) shareLinkEl.value = link;
     if (shareWrap) shareWrap.classList.remove('hidden');
   }
 
-  async function startCaller(){
+  /**
+   * Start the caller flow: wait for WebSocket, get microphone, create peer connection.
+   */
+  async function startCaller() {
     if (waitWSOpen) await waitWSOpen(3000);
-    setStatus(i18next.t('status.preparing'),'warn-txt');
+    setStatus(i18next.t('status.preparing'), 'warn-txt');
     btnCall && (btnCall.disabled = true);
     await getMic();
-    createPC((s)=>{ if (audioEl) audioEl.srcObject = s; logT('webrtc','webrtc.remote_track'); });
-    setStatus(i18next.t('room.ready_share_link'),'ok');
+    createPC((s) => {
+      if (audioEl) audioEl.srcObject = s;
+      logT('webrtc', 'webrtc.remote_track');
+    });
+    setStatus(i18next.t('room.ready_share_link'), 'ok');
     if (btnHang) btnHang.disabled = false;
   }
 
-  function doCleanup(reason='user-hangup'){
-    try { wsSend('bye', {reason}); } catch {}
+  /**
+   * Clean up the call, close connections, reset UI.
+   * @param {string} reason - Reason for cleanup, for logging.
+   */
+  function doCleanup(reason = 'user-hangup') {
+    try { wsSend('bye', { reason }); } catch {}
     try { wsClose(); } catch {}
     try { cleanupRTC(reason); } catch {}
     clearInterval(pingTimer);
 
-    // вернуть кнопки в исходное состояние
+    // Reset buttons and UI to initial state.
     const hasRoom = !!parseRoom();
     if (btnHang) btnHang.disabled = true;
     if (btnCall) btnCall.classList.toggle('hidden', hasRoom);
     if (btnAnswer) btnAnswer.classList.toggle('hidden', !hasRoom);
     if (shareWrap) shareWrap.classList.add('hidden');
-    setStatus(i18next.t('call.ended'),'warn-txt');
+    setStatus(i18next.t('call.ended'), 'warn-txt');
     if (noteEl) noteEl.textContent = '';
     offerAttempted = false;
   }
 
-  // --- URL init ---
-  async function initByUrl(){
+  // --- INITIALIZATION BASED ON URL PARAMETERS ---
+  /**
+   * Initialize the app based on the roomId in the URL, if present.
+   * If no roomId, prepare the caller UI; otherwise, connect as callee.
+   */
+  async function initByUrl() {
     const rid = parseRoom();
     if (!rid) {
-      logT('info','debug.no_room_param_caller');
-      setStatus(i18next.t('common.ready'),'ok');
+      logT('info', 'debug.no_room_param_caller');
+      setStatus(i18next.t('common.ready'), 'ok');
       setRoleLabel(true);
       return;
     }
     role = 'callee';
     roomId = rid;
-    roomId = roomId ? String(roomId).replace(/[^A-Za-z0-9_-]/g,'') : roomId;
+    roomId = roomId ? String(roomId).replace(/[^A-Za-z0-9_-]/g, '') : roomId;
     await connectWS('callee', roomId, onSignal);
     setRoleLabel(false);
-    setStatus(i18next.t('ws.waiting_offer'),'ok');
+    setStatus(i18next.t('ws.waiting_offer'), 'ok');
     if (btnAnswer) btnAnswer.classList.remove('hidden');
     if (btnCall) btnCall.classList.add('hidden');
   }
 
-  // --- Buttons ---
+  // --- BUTTON EVENT HANDLERS ---
+  // Handler for "Call" button: create a room, connect, and prepare sharing.
   if (btnCall) btnCall.onclick = async () => {
     try {
       btnCall.disabled = true;
-      setStatus(i18next.t('status.preparing'),'warn');
+      setStatus(i18next.t('status.preparing'), 'warn');
       const resp = await apiCreateRoom();
       const rawId = (resp && (resp.roomId || resp.room || resp.id)) || null;
-      roomId = rawId ? String(rawId).replace(/[^A-Za-z0-9_-]/g,'') : null;
+      roomId = rawId ? String(rawId).replace(/[^A-Za-z0-9_-]/g, '') : null;
       if (!roomId) {
-        setStatus(i18next.t('error.room_create_failed'),'err');
+        setStatus(i18next.t('error.room_create_failed'), 'err');
         btnCall.disabled = false;
         return;
       }
@@ -324,46 +392,57 @@ function renderLangSwitch(active) {
       await connectWS('caller', roomId, onSignal);
       shareRoomLink(roomId);
       await startCaller();
-      setStatus(i18next.t('room.ready_share_link'),'ok');
+      setStatus(i18next.t('room.ready_share_link'), 'ok');
       if (btnHang) btnHang.disabled = false;
-    } catch(e){
-      setStatus(i18next.t('error.room_create_failed'),'err');
-      logT('error','error.room_create_failed');
+    } catch (e) {
+      setStatus(i18next.t('error.room_create_failed'), 'err');
+      logT('error', 'error.room_create_failed');
       if (noteEl) noteEl.textContent = e && e.message ? e.message : String(e);
       btnCall.disabled = false;
     }
   };
 
+  // Handler for "Answer" button: connect as callee and accept incoming offer.
   if (btnAnswer) btnAnswer.onclick = async () => {
     const rid = parseRoom();
-    if (!rid) { alert(i18next.t('room.open_invite_with_param')); logT('warn','warn.ws_already_connected_callee'); return; }
+    if (!rid) {
+      alert(i18next.t('room.open_invite_with_param'));
+      logT('warn', 'warn.ws_already_connected_callee');
+      return;
+    }
     role = 'callee'; roomId = rid;
 
     if (!isWSOpen()) await connectWS('callee', roomId, onSignal);
-    else logT('warn','warn.ws_already_connected_callee');
+    else logT('warn', 'warn.ws_already_connected_callee');
 
     if (pendingOffer) {
-      await acceptIncoming(pendingOffer, (s)=>{ if (audioEl) audioEl.srcObject = s; logT('webrtc','webrtc.remote_track'); });
+      await acceptIncoming(pendingOffer, (s) => {
+        if (audioEl) audioEl.srcObject = s;
+        logT('webrtc', 'webrtc.remote_track');
+      });
       pendingOffer = null;
       if (btnHang) btnHang.disabled = false;
     } else {
-      logT('warn','error.btnanswer_no_offer');
-      setStatus(i18next.t('signal.waiting_offer'),'warn');
+      logT('warn', 'error.btnanswer_no_offer');
+      setStatus(i18next.t('signal.waiting_offer'), 'warn');
     }
   };
 
+  // Handler for "Hang Up" button: clean up the call.
   if (btnHang) btnHang.onclick = () => doCleanup('user-hangup');
 
+  // Handler for "Native Share" button: share the room link using the browser's native share dialog.
   if (btnNativeShare) btnNativeShare.onclick = () => {
     const txt = (shareLinkEl && shareLinkEl.value) || '';
     if (navigator.share) navigator.share({
       title: i18next.t('dialog.invite_title'),
       text: i18next.t('call.offer_received_click_answer') + ' ' + txt,
       url: txt
-    }).catch(()=>{});
+    }).catch(() => { });
     else if (noteEl) noteEl.textContent = i18next.t('share.native_unavailable');
   };
 
+  // Handler for "Copy Link" button: copy the share link to the clipboard.
   if (btnCopy) btnCopy.onclick = async () => {
     try {
       await navigator.clipboard.writeText((shareLinkEl && shareLinkEl.value) || '');
@@ -373,6 +452,7 @@ function renderLangSwitch(active) {
     }
   };
 
+  // Handler for "Copy Diagnostics" button: copy diagnostic info to the clipboard.
   if (btnCopyDiag) btnCopyDiag.onclick = async () => {
     const report = [
       '=== DIAG REPORT ===',
@@ -389,14 +469,14 @@ function renderLangSwitch(active) {
     try { await navigator.clipboard.writeText(report); } catch { alert(report); }
   };
 
-  // --- Boot ---
+  // --- APPLICATION BOOTSTRAP SEQUENCE ---
   setStatus(i18next.t('status.initializing'));
   try { renderEnv(); } catch {}
-  logT('info','dev.client_loaded_vite');
+  logT('info', 'dev.client_loaded_vite');
   initByUrl();
 
-  // Выставим видимость кнопок при загрузке
-  if (!parseRoom()){
+  // Set initial visibility of buttons on page load based on room presence.
+  if (!parseRoom()) {
     if (btnCall) btnCall.classList.remove('hidden');
     if (btnAnswer) btnAnswer.classList.add('hidden');
     if (shareWrap) shareWrap.classList.add('hidden');

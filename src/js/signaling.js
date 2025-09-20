@@ -1,29 +1,47 @@
 // public/js/signaling.js
-// Сигналинг, совместимый с текущим index.html.
-// Публикует функции в window и не ломает существующий код.
-// Подключайте ДО большого инлайн-скрипта:
+// Signaling module compatible with the current index.html.
+// Exposes functions on the window object without breaking existing code.
+// Include this BEFORE the large inline script:
 //   <script src="/public/js/signaling.js"></script>
 
 (function () {
+  // Configuration object, either from global app config or defaults
   const CFG = (window.__APP_CONFIG__) || {
     SERVER_URL: 'https://call.zababba.com/signal',
     WS_URL:     'wss://call.zababba.com/ws'
   };
 
-  // Локальные ссылки на активный WS и таймер пингов
+  // Local references to the active WebSocket and the ping timer
   let _ws = null;
   let _pingTimer = null;
 
-  // Lightweight i18n accessor that works if i18next is on window
+  /**
+   * Lightweight internationalization helper function.
+   * Attempts to use i18next if available on the window object,
+   * otherwise falls back to provided fallback or the key itself.
+   * @param {string} key - Translation key
+   * @param {string} fallback - Fallback string if translation not found
+   * @returns {string} Translated string or fallback
+   */
   function t(key, fallback) {
     try { return (window.i18next && window.i18next.t) ? window.i18next.t(key) : (fallback || key); }
     catch { return fallback || key; }
   }
 
+  /**
+   * Checks if the WebSocket connection is currently open.
+   * @returns {boolean} True if WebSocket is open, false otherwise
+   */
   function isWSOpen() {
     return !!(_ws && _ws.readyState === WebSocket.OPEN);
     }
 
+  /**
+   * Waits until the WebSocket connection is open or times out.
+   * Polls every 50ms up to the specified timeout.
+   * @param {number} timeoutMs - Timeout in milliseconds (default 3000ms)
+   * @returns {Promise<void>} Resolves when WebSocket is open, rejects on timeout
+   */
   function waitWSOpen(timeoutMs = 3000) {
     if (isWSOpen()) return Promise.resolve();
     return new Promise((resolve, reject) => {
@@ -42,6 +60,13 @@
     });
   }
 
+  /**
+   * Creates a new room via the signaling server's REST API.
+   * Optionally accepts a custom room ID.
+   * @param {string} [customId] - Optional custom room ID
+   * @returns {Promise<object>} Resolves with created room details
+   * @throws Throws error if creation fails
+   */
   async function apiCreateRoom(customId) {
     const url = `${CFG.SERVER_URL}/rooms`;
     try {
@@ -62,26 +87,26 @@
   }
 
   /**
-   * Подключение к WS сигналинга.
-   * @param {'caller'|'callee'} role
-   * @param {string} roomId
-   * @param {(msg:any)=>void} onMessage - колбэк на каждое входящее сообщение
-   * @returns {Promise<{memberId:string}>} резолвится после 'hello'
+   * Establishes a WebSocket connection to the signaling server.
+   * Supports automatic reconnection with exponential backoff on unexpected closures.
+   * Resolves once a 'hello' message is received from the server with memberId.
+   * @param {'caller'|'callee'} role - Role of the client in the call
+   * @param {string} roomId - The room ID to join
+   * @param {(msg:any)=>void} onMessage - Callback invoked on each incoming message
+   * @returns {Promise<{memberId:string}>} Resolves after receiving 'hello' message
    */
-  // public/js/signaling.js
-// ... остальной код без изменений ...
-
- // public/js/signaling.js
-// ... остальной код без изменений ...
-
 function connectWS(role, roomId, onMessage) {
   return new Promise((resolve, reject) => {
-    // Глобальное состояние сокета и бэкофа хранится в замыкании файла
-    let attempt = 0;                 // счётчик попыток
-    const maxDelay = 10_000;         // максимум задержки
-    let resolvedHello = false;
-    let closedCleanly = false;
+    // Internal state for connection attempts and backoff
+    let attempt = 0;                 // Number of connection attempts
+    const maxDelay = 10_000;         // Maximum backoff delay in ms
+    let resolvedHello = false;       // Flag to track if 'hello' message received
+    let closedCleanly = false;       // Flag to indicate clean socket closure
 
+    /**
+     * Opens the WebSocket connection and sets up event handlers.
+     * Handles automatic reconnection logic on unexpected closures.
+     */
     const openSocket = () => {
       const q = new URLSearchParams({ roomId: roomId, role }).toString();
       const url = `${CFG.WS_URL}?${q}`;
@@ -91,11 +116,11 @@ function connectWS(role, roomId, onMessage) {
 
       _ws.onopen = () => {
         window.addLog && window.addLog('signal', 'ws open');
-        // пинги каждые 20с
+        // Start sending ping messages every 20 seconds to keep connection alive
         _pingTimer = setInterval(() => {
           try { _ws?.send(JSON.stringify({ type: 'ping', t: Date.now() })); } catch {}
         }, 20_000);
-        // успешное подключение — сбрасываем backoff
+        // Reset connection attempt counter on successful connection
         attempt = 0;
       };
 
@@ -103,15 +128,17 @@ function connectWS(role, roomId, onMessage) {
         let msg;
         try { msg = JSON.parse(ev.data); } catch { msg = ev.data; }
 
+        // Ignore ping messages from server
         if (typeof msg === 'object' && msg && msg.type === 'ping') {
           window.addLog && window.addLog('signal', 'recv ping');
           return;
         }
-        // hello впервые — резолвим connectWS
+        // On receiving 'hello' message for the first time, resolve the connectWS promise
         if (msg && msg.type === 'hello' && !resolvedHello) {
           resolvedHello = true;
           resolve({ memberId: msg.memberId || 'unknown' });
         }
+        // Pass all other messages to the provided callback
         onMessage && onMessage(msg);
       };
 
@@ -123,29 +150,29 @@ function connectWS(role, roomId, onMessage) {
         window.addLog && window.addLog('signal', `ws close code=${e.code} reason=${e.reason || '-'}`);
         if (_pingTimer) { clearInterval(_pingTimer); _pingTimer = null; }
 
-        // Чистое закрытие — не переподключаемся
+        // If the socket closed cleanly (normal closure codes), do not attempt reconnect
         const normal = (e.code === 1000 || e.code === 1005);
         if (normal) {
           closedCleanly = true;
           return;
         }
 
-        // Если мы ещё не получили hello — проваливаем стартовую connectWS
+        // If we haven't received the 'hello' message yet, reject the initial connect promise
         if (!resolvedHello) {
           reject(new Error('WebSocket closed before hello'));
           return;
         }
 
-        // Мягкий авто-reconnect: экспоненциальный backoff до 10s
+        // Automatic reconnect with exponential backoff up to maxDelay
         if (!closedCleanly) {
           attempt += 1;
           const delay = Math.min(500 * 2 ** (attempt - 1), maxDelay);
           if (typeof window.setStatus === 'function') {
-            window.setStatus(t('signal.recovering', 'восстанавливаем сигналинг…'), 'warn');
+            window.setStatus(t('signal.recovering', 'Restoring signaling connection…'), 'warn');
           }
           window.addLog && window.addLog('signal', `ws reconnect in ${delay}ms (attempt ${attempt})`);
           setTimeout(() => {
-            // Защита от гонок: если кто-то уже открыл новый сокет — выходим
+            // Prevent race conditions: if a new socket is already open, do not open another
             if (_ws && _ws.readyState === WebSocket.OPEN) return;
             openSocket();
           }, delay);
@@ -153,9 +180,9 @@ function connectWS(role, roomId, onMessage) {
       };
     };
 
-    // Если уже открыт — не плодим соединения
+    // Avoid opening multiple connections if one is already open
     if (_ws && _ws.readyState === WebSocket.OPEN) {
-      window.addLog && window.addLog('warn', `WS уже подключён (${role})`);
+      window.addLog && window.addLog('warn', `WS already connected (${role})`);
       resolve({ memberId: 'already-open' });
       return;
     }
@@ -164,6 +191,12 @@ function connectWS(role, roomId, onMessage) {
   });
 }
 
+  /**
+   * Sends a JSON message of the specified type over the WebSocket.
+   * Optionally includes a payload object.
+   * @param {string} type - Message type
+   * @param {object} [payload] - Optional message payload
+   */
   function wsSend(type, payload) {
     try {
       if (_ws && _ws.readyState === WebSocket.OPEN) {
@@ -175,6 +208,9 @@ function connectWS(role, roomId, onMessage) {
     }
   }
 
+  /**
+   * Closes the active WebSocket connection and clears the ping timer.
+   */
   function wsClose() {
     try {
       if (_ws) _ws.close();
@@ -183,8 +219,8 @@ function connectWS(role, roomId, onMessage) {
     _ws = null;
   }
 
-  // Публикуем в window, если ещё не объявлено в глобальной области,
-  // чтобы не ломать существующий index.html
+  // Expose the API functions on the window object if not already defined,
+  // preserving compatibility with existing index.html scripts.
   try {
     if (typeof window !== 'undefined') {
       if (!window.apiCreateRoom) window.apiCreateRoom = apiCreateRoom;
@@ -193,7 +229,7 @@ function connectWS(role, roomId, onMessage) {
       if (!window.wsClose)      window.wsClose      = wsClose;
       if (!window.isWSOpen)     window.isWSOpen     = isWSOpen;
       if (!window.waitWSOpen)  window.waitWSOpen  = waitWSOpen;
-      // служебно
+      // Internal reference for debugging or advanced usage
       window.__SIGNALING__ = { apiCreateRoom, connectWS, wsSend, wsClose, isWSOpen, waitWSOpen };
     }
   } catch {}

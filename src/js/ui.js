@@ -1,7 +1,7 @@
 // public/js/ui.js
-// UI-хелперы: диалоги, отладка, шаринг, копирование. Публикует shareRoomLink().
+// UI helpers: dialogs, debugging, sharing, copying. Exposes shareRoomLink().
 (function(){
-  // Кэшируем DOM
+  // Cache DOM elements for later use
   const btnHowTo = document.getElementById('btnHowTo');
   const btnAbout = document.getElementById('btnAbout');
   const btnDebug = document.getElementById('btnDebug');
@@ -15,12 +15,14 @@
   const btnCopy = document.getElementById('btnCopy');
   const btnCopyDiag = document.getElementById('btnCopyDiag');
 
-  // Диалоги / отладка
+  // Dialogs and debugging toggles
+  // Attach click handlers to open modal dialogs or toggle debug panel visibility
   if (btnHowTo && dlgHowTo) btnHowTo.onclick = () => dlgHowTo.showModal();
   if (btnAbout && dlgAbout) btnAbout.onclick = () => dlgAbout.showModal();
   if (btnDebug && debugBlock) btnDebug.onclick = () => debugBlock.classList.toggle('hidden');
 
-  // Шаринг / копирование ссылки
+  // Sharing and copying the invitation link
+  // Utilize native share API if available, otherwise provide feedback about unavailability
   if (btnNativeShare && shareLinkEl) {
     btnNativeShare.onclick = () => {
       const txt = shareLinkEl.value || '';
@@ -35,6 +37,7 @@
       }
     };
   }
+  // Copy the invitation link to clipboard with user feedback
   if (btnCopy && shareLinkEl) {
     btnCopy.onclick = async () => {
       try {
@@ -47,7 +50,8 @@
     };
   }
 
-  // Диагностический отчёт
+  // Diagnostic report copying functionality
+  // Gathers environment and application info and copies it to clipboard or alerts if clipboard fails
   if (btnCopyDiag) {
     btnCopyDiag.onclick = async () => {
       const cfg = (window.__APP_CONFIG__) || { SERVER_URL:'', WS_URL:'' };
@@ -67,7 +71,8 @@
     };
   }
 
-  // Генерация ссылки приглашения
+  // Generates and displays the invitation link for a given room ID
+  // Updates input field and makes the sharing UI visible
   function shareRoomLink(rid){
     const base = location.origin + location.pathname;
     const link = `${base}?room=${encodeURIComponent(rid)}`;
@@ -75,7 +80,7 @@
     if (shareWrap) shareWrap.classList.remove('hidden');
   }
 
-  // Экспорт
+  // Export the shareRoomLink function globally if not already defined
   if (!window.shareRoomLink) window.shareRoomLink = shareRoomLink;
   window.__UI__ = { shareRoomLink };
 })();

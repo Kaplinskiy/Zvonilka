@@ -1,78 +1,110 @@
 // /sw.js
-// Минимальный Service Worker: кэш ядра, offline fallback, мягкий кеш для статики
+// Service Worker для «Звонилки»
+// Цели: кэш ядра, offline fallback, мягкий кэш статики из /public
+// Важно: пути из Vite /public публикуются в корень, поэтому здесь БЕЗ префикса /public
 
-const CACHE = 'zvonilka-v1';
+const CACHE = 'zvonilka-v2';
+
+// Базовые файлы, которые точно существуют в репозитории (из папки public → корень)
 const CORE = [
-  '/',
+  '/',                     // SPA entry
   '/index.html',
-  '/public/manifest.webmanifest',
-  '/public/favicon.svg',
-  '/public/config.js',
-  '/public/js/helpers.js',
-  '/public/js/signaling.js',
-  '/public/js/webrtc.js',
-  '/public/js/ui.js',
-  '/public/offline.html',
+  '/manifest.webmanifest',
+  '/offline.html',
+  '/favicon.ico',
+  '/icons/favicon.svg',    // если отсутствует — просто не закэшируется в install
+  '/config.js',
+  '/i18n/ru.json',
+  '/i18n/en.json',
+  '/i18n/he.json',
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(CORE)).catch(() => null)
-  );
+  e.waitUntil((async () => {
+    try {
+      const cache = await caches.open(CACHE);
+      // addAll упадёт, если какой-то путь недоступен — поэтому ловим и продолжаем
+      await cache.addAll(CORE);
+    } catch {
+      // игнорируем ошибки отдельных ресурсов, офлайн все равно будет работать на /offline.html
+    }
+  })());
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (e) => {
-  e.waitUntil(
-    caches.keys().then((keys) => Promise.all(
-      keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))
-    ))
-  );
+  e.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.map((k) => (k !== CACHE ? caches.delete(k) : Promise.resolve())));
+  })());
   self.clients.claim();
 });
 
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   const url = new URL(req.url);
-  const sameOrigin = url.origin === self.location.origin;
+
+  // Перехватываем только свой origin
+  if (url.origin !== self.location.origin) return;
 
   // 1) Навигация → Network first с офлайн‑фолбэком
   if (req.mode === 'navigate') {
-    e.respondWith((async () => {
-      try {
-        const fresh = await fetch(req);
-        // Обновим кэш index.html на лету
-        const copy = fresh.clone();
-        const cache = await caches.open(CACHE);
-        cache.put('/', copy.clone());
-        cache.put('/index.html', copy);
-        return fresh;
-      } catch {
-        const cache = await caches.open(CACHE);
-        return (await cache.match('/public/offline.html')) || Response.error();
-      }
-    })());
+    e.respondWith(networkFirstForNavigation(req));
     return;
   }
 
-  // 2) Статика нашего домена → Cache first
-  if (sameOrigin && req.method === 'GET' && (
-    url.pathname.startsWith('/public/') ||
-    url.pathname === '/index.html' || url.pathname === '/'
-  )) {
-    e.respondWith((async () => {
-      const cache = await caches.open(CACHE);
-      const cached = await cache.match(req);
-      if (cached) return cached;
-      try {
-        const fresh = await fetch(req);
-        cache.put(req, fresh.clone());
-        return fresh;
-      } catch {
-        return cached || Response.error();
-      }
-    })());
+  // 2) Наши статические ресурсы из /public → Cache first
+  if (req.method === 'GET' && isStaticPath(url.pathname)) {
+    e.respondWith(cacheFirst(req));
     return;
   }
-  // 3) Остальное — по сети без перехвата
+
+  // Остальное — по сети без вмешательства (API, WS апгрейды и т.п.)
 });
+
+// ----------------- helpers -----------------
+
+function isStaticPath(pathname) {
+  // Ровно то, что реально лежит в /public после билда (в корне)
+  return (
+    pathname === '/' ||
+    pathname === '/index.html' ||
+    pathname === '/manifest.webmanifest' ||
+    pathname === '/offline.html' ||
+    pathname === '/favicon.ico' ||
+    pathname.startsWith('/icons/') ||
+    pathname === '/config.js' ||
+    pathname.startsWith('/i18n/')
+  );
+}
+
+async function cacheFirst(req) {
+  const cache = await caches.open(CACHE);
+  const cached = await cache.match(req);
+  if (cached) return cached;
+  try {
+    const res = await fetch(req);
+    // Только успешные ответы кладём в кэш
+    if (res && res.ok) cache.put(req, res.clone());
+    return res;
+  } catch {
+    return cached || Response.error();
+  }
+}
+
+async function networkFirstForNavigation(req) {
+  const cache = await caches.open(CACHE);
+  try {
+    const fresh = await fetch(req);
+    // Кэшируем index для офлайна
+    if (fresh && fresh.ok) {
+      const copy = fresh.clone();
+      // Кладём по двум ключам, чтобы offline работал и для '/' и для '/index.html'
+      cache.put('/', copy.clone());
+      cache.put('/index.html', copy);
+    }
+    return fresh;
+  } catch {
+    return (await cache.match('/offline.html')) || Response.error();
+  }
+}
