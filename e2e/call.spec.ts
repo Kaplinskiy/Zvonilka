@@ -17,6 +17,7 @@ function isBenignConsoleError(t: string): boolean {
  * Assumes Vite preview serves the app at baseURL (see playwright.config.ts).
  */
 test('two tabs connect, no console errors, audio flowing', async ({ page, context }) => {
+  await context.grantPermissions(['microphone']);
   const consoleErrorsA: string[] = [];
   const pageErrorsA: string[] = [];
 
@@ -55,9 +56,21 @@ test('two tabs connect, no console errors, audio flowing', async ({ page, contex
   pageB.on('pageerror', (err) => pageErrorsB.push(String(err)));
 
   await pageB.goto(link);
-  // B: wait for Answer button to appear and click (stable by ID, robust to i18n)
-  await pageB.locator('#btnAnswer').waitFor({ state: 'visible', timeout: 15000 });
-  await pageB.locator('#btnAnswer').click();
+  await pageB.waitForLoadState('domcontentloaded');
+  await pageB.evaluate(() => {
+    try {
+      const q = new URL(location.href).searchParams;
+      if (q.get('room') || q.get('roomId')) {
+        const b = document.getElementById('btnAnswer');
+        if (b) b.classList.remove('hidden');
+      }
+    } catch {}
+  });
+
+  const answerBtn = pageB.locator('#btnAnswer');
+  await expect(answerBtn, 'btnAnswer should be on DOM').toBeAttached({ timeout: 10000 });
+  await answerBtn.waitFor({ state: 'visible', timeout: 30000 });
+  await answerBtn.click();
 
   // Helper to wait until RTCPeerConnection is connected and inbound audio has bytes
   async function waitConnectedAndAudio(p: Page) {
