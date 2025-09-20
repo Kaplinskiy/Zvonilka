@@ -11,7 +11,11 @@
         "start:pm2": "pm2 startOrReload ecosystem.config.js",
         "test:unit": "vitest run --coverage",
         "lint": "eslint .",
-        "e2e": "playwright test"
+        "e2e": "playwright test",
+        "e2e:prod": "PW_BASE_URL=https://call.zababba.com PW_CHROMIUM_ARGS='--use-fake-ui-for-media-stream --use-fake-device-for-media-stream --autoplay-policy=no-user-gesture-required' playwright test e2e/call.spec.ts",
+        "test:watch:e2e": "playwright test --ui",
+        "test:watch:unit": "bash -lc 'if command -v vitest >/dev/null 2>&1; then vitest --watch; elif command -v jest >/dev/null 2>&1; then jest --watch; else echo \"[skip] no unit test runner\"; fi'",
+        "test:watch": "run-p --continue-on-error test:watch:unit test:watch:e2e"
     },
     "dependencies": {
         "cors": "^2.8.5",
@@ -22,6 +26,7 @@
         "@playwright/test": "^1.55.0",
         "@types/node": "^24.5.2",
         "@vitest/coverage-v8": "^3.2.4",
+        "npm-run-all": "^4.1.5",
         "supertest": "^7.1.4",
         "vite": "^6.1.6",
         "vitest": "^3.2.4",

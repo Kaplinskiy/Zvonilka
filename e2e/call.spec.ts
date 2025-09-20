@@ -1,7 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
 
-test.setTimeout(60_000);
-
 function isBenignConsoleError(t: string): boolean {
   const s = t.toLowerCase();
   // Ignore missing small favicons, webmanifest prefetches, sourcemaps in dev,
@@ -20,6 +18,7 @@ function isBenignConsoleError(t: string): boolean {
  * Assumes Vite preview serves the app at baseURL (see playwright.config.ts).
  */
 test('two tabs connect, no console errors, audio flowing', async ({ page, context }) => {
+  test.setTimeout(60_000);
   await context.grantPermissions(['microphone']);
   const consoleErrorsA: string[] = [];
   const pageErrorsA: string[] = [];
