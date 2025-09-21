@@ -167,7 +167,9 @@ function connectWS(role, roomId, onMessage) {
         if (!closedCleanly) {
           attempt += 1;
           const delay = Math.min(500 * 2 ** (attempt - 1), maxDelay);
-          if (typeof window.setStatus === 'function') {
+          if (typeof window.setStatusKey === 'function') {
+            window.setStatusKey('signal.recovering', 'warn');
+          } else if (typeof window.setStatus === 'function') {
             window.setStatus(t('signal.recovering', 'Restoring signaling connection…'), 'warn');
           }
           window.addLog && window.addLog('signal', `ws reconnect in ${delay}ms (attempt ${attempt})`);

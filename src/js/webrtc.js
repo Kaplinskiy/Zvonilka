@@ -147,13 +147,13 @@
         window.addLog && window.addLog('webrtc', `ice=${st}`);
         if (typeof window.setStatus === 'function') {
             if (st === 'connected') {
-            window.setStatus(t('status.connected','connection established'),'ok');
+            window.setStatusKey('status.connected', 'ok');
             } else if (st === 'checking') {
-            window.setStatus(t('status.connecting','connecting…'),'warn');
+            window.setStatusKey('status.connecting', 'warn');
             } else if (st === 'disconnected') {
-            window.setStatus(t('status.lost_recovering','connection lost, attempting recovery…'),'warn');
+            window.setStatusKey('status.lost_recovering', 'warn');
             } else if (st === 'failed') {
-            window.setStatus(t('error.connection','connection error'),'err');
+            window.setStatus(i18next.t('error.connection'), 'err');
             }
         }
     };
@@ -164,15 +164,15 @@
         window.addLog && window.addLog('webrtc', `state=${st}`);
         if (typeof window.setStatus === 'function') {
             if (st === 'connected') {
-            window.setStatus(t('status.connected','connection established'),'ok');
+            window.setStatusKey('status.connected', 'ok');
             } else if (st === 'connecting') {
-            window.setStatus(t('status.connecting','connecting…'),'warn');
+            window.setStatusKey('status.connecting', 'warn');
             } else if (st === 'disconnected') {
-            window.setStatus(t('status.lost_recovering','connection lost, attempting recovery…'),'warn');
+            window.setStatusKey('status.lost_recovering', 'warn');
             } else if (st === 'failed') {
-            window.setStatus(t('error.connection','connection error'),'err');
+            window.setStatus(i18next.t('error.connection'), 'err');
             } else if (st === 'closed') {
-            window.setStatus(t('status.closed','connection closed'),'warn');
+            window.setStatusKey('status.closed', 'warn');
             }
         }
     };
