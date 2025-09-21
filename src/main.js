@@ -153,17 +153,19 @@ function renderLangSwitch(active) {
     } catch (_) {}
   };
 
-  // Persisted status via i18n key. Re-applies on language change.
-  window.__STATUS_KEY = window.__STATUS_KEY || null;
-  const setStatusKey = (key, cls) => {
-    window.__STATUS_KEY = key || null;
-    const txt = key ? i18next.t(key) : '';
+  // Persisted status via i18n key + class + extras. Re-applies on language change.
+  window.__STATUS = window.__STATUS || { key: null, cls: null, extras: null };
+  const setStatusKey = (key, cls, extras) => {
+    window.__STATUS = { key: key || null, cls: cls || null, extras: extras || null };
+    const txt = key ? i18next.t(key, extras || undefined) : '';
     setStatus(txt, cls);
   };
+  window.setStatusKey = setStatusKey;
   if (i18next && typeof i18next.on === 'function') {
     i18next.on('languageChanged', () => {
       try {
-        if (window.__STATUS_KEY) setStatus(i18next.t(window.__STATUS_KEY));
+        const s = window.__STATUS || {};
+        if (s.key) setStatus(i18next.t(s.key, s.extras || undefined), s.cls || undefined);
       } catch {}
     });
   }
@@ -217,7 +219,7 @@ function renderLangSwitch(active) {
       switch (msg.type) {
         case 'hello': {
           memberId = msg.memberId || memberId;
-          setStatus(i18next.t('ws.connected_room', { room: (roomId || parseRoom() || '-') }), 'ok');
+          setStatusKey('ws.connected_room', 'ok', { room: (roomId || parseRoom() || '-') });
           logT('signal', 'debug.signal_recv_hello');
           // If user is the caller and offer hasn't been sent, send an offer.
           if (role === 'caller' && !offerAttempted) {
@@ -287,7 +289,7 @@ function renderLangSwitch(active) {
           pendingOffer = msg.payload || msg.offer || null;
           if (pendingOffer) {
             btnAnswer && btnAnswer.classList.remove('hidden');
-            setStatus(i18next.t('call.offer_received_click_answer'), 'warn');
+            setStatusKey('call.offer_received_click_answer', 'warn');
           }
           break;
         }
@@ -341,7 +343,7 @@ function renderLangSwitch(active) {
       if (audioEl) audioEl.srcObject = s;
       logT('webrtc', 'webrtc.remote_track');
     });
-    setStatus(i18next.t('room.ready_share_link'), 'ok');
+    setStatusKey('room.ready_share_link', 'ok');
     if (btnHang) btnHang.disabled = false;
   }
 
@@ -361,7 +363,7 @@ function renderLangSwitch(active) {
     if (btnCall) btnCall.classList.toggle('hidden', hasRoom);
     if (btnAnswer) btnAnswer.classList.toggle('hidden', !hasRoom);
     if (shareWrap) shareWrap.classList.add('hidden');
-    setStatus(i18next.t('call.ended'), 'warn-txt');
+    setStatusKey('call.ended', 'warn-txt');
     if (noteEl) noteEl.textContent = '';
     offerAttempted = false;
   }
@@ -375,7 +377,7 @@ function renderLangSwitch(active) {
     const rid = parseRoom();
     if (!rid) {
       logT('info', 'debug.no_room_param_caller');
-      setStatus(i18next.t('common.ready'), 'ok');
+      setStatusKey('common.ready', 'ok');
       setRoleLabel(true);
       return;
     }
@@ -384,7 +386,7 @@ function renderLangSwitch(active) {
     roomId = roomId ? String(roomId).replace(/[^A-Za-z0-9_-]/g, '') : roomId;
     await connectWS('callee', roomId, onSignal);
     setRoleLabel(false);
-    setStatus(i18next.t('ws.waiting_offer'), 'ok');
+    setStatusKey('ws.waiting_offer', 'ok');
     if (btnAnswer) btnAnswer.classList.remove('hidden');
     if (btnCall) btnCall.classList.add('hidden');
   }
@@ -439,7 +441,7 @@ function renderLangSwitch(active) {
       if (btnHang) btnHang.disabled = false;
     } else {
       logT('warn', 'error.btnanswer_no_offer');
-      setStatus(i18next.t('signal.waiting_offer'), 'warn');
+      setStatusKey('signal.waiting_offer', 'warn');
     }
   };
 
