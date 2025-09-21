@@ -409,7 +409,7 @@ function renderLangSwitch(active) {
       await connectWS('caller', roomId, onSignal);
       shareRoomLink(roomId);
       await startCaller();
-      setStatus(i18next.t('room.ready_share_link'), 'ok');
+      setStatusKey('room.ready_share_link', 'ok');
       if (btnHang) btnHang.disabled = false;
     } catch (e) {
       setStatus(i18next.t('error.room_create_failed'), 'err');
