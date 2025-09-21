@@ -58,8 +58,8 @@
   "status.initializing": "инициализация…",
   "status.preparing": "подготовка…",
   "status.connecting": "соединяемся…",
-  "status.connected": "соединение установлено",
-  "status.closed": "соединение закрыто",
+  "status.in_call": "в разговоре",
+  "status.ended": "разговор завершён",
   "status.lost_recovering": "соединение потеряно, пытаемся восстановить…",
 
   "role.caller": "Режим: инициатор",

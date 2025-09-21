@@ -58,8 +58,8 @@
   "status.initializing": "Initializing…",
   "status.preparing": "Preparing…",
   "status.connecting": "Connecting…",
-  "status.connected": "Connection established",
-  "status.closed": "Connection closed",
+  "status.in_call": "In call",
+  "status.ended": "Call ended",
   "status.lost_recovering": "Connection lost, trying to recover…",
 
   "role.caller": "Mode: caller",

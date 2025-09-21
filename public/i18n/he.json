@@ -58,8 +58,8 @@
   "status.initializing": "מאתחל…",
   "status.preparing": "מכין…",
   "status.connecting": "מתחבר…",
-  "status.connected": "חיבור נוצר",
-  "status.closed": "החיבור נסגר",
+  "status.in_call": "בשיחה",
+  "status.ended": "השיחה הסתיימה",
   "status.lost_recovering": "החיבור אבד, מנסה לשחזר…",
 
   "role.caller": "מצב: יוזם",
