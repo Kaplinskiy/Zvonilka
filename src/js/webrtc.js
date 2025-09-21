@@ -147,7 +147,7 @@
         window.addLog && window.addLog('webrtc', `ice=${st}`);
         if (typeof window.setStatus === 'function') {
             if (st === 'connected') {
-            window.setStatusKey('status.connected', 'ok');
+            window.setStatusKey('status.in_call', 'ok');
             } else if (st === 'checking') {
             window.setStatusKey('status.connecting', 'warn');
             } else if (st === 'disconnected') {
@@ -164,7 +164,7 @@
         window.addLog && window.addLog('webrtc', `state=${st}`);
         if (typeof window.setStatus === 'function') {
             if (st === 'connected') {
-            window.setStatusKey('status.connected', 'ok');
+            window.setStatusKey('status.in_call', 'ok');
             } else if (st === 'connecting') {
             window.setStatusKey('status.connecting', 'warn');
             } else if (st === 'disconnected') {
@@ -172,7 +172,7 @@
             } else if (st === 'failed') {
             window.setStatus(i18next.t('error.connection'), 'err');
             } else if (st === 'closed') {
-            window.setStatusKey('status.closed', 'warn');
+            window.setStatusKey('status.ended', 'warn');
             }
         }
     };
