@@ -36,14 +36,22 @@
 
   /**
    * Sets the status text and optional CSS class on the DOM element with id 'status'.
-   * The status text is passed through the translation function to support localization.
+   * Integrates with key-based status mechanism if available.
    * Does nothing if the status element does not exist.
-   * @param {string} text - The status text to display.
+   * @param {string} text - The status text or key to display.
    * @param {string} [cls] - Optional CSS class to apply to the status element.
    */
   function __setStatus(text, cls){
     const el = document.getElementById('status');
     if (!el) return;
+    if (
+      window.setStatusKey &&
+      typeof text === 'string' &&
+      (text.startsWith('status.') || text.startsWith('signal.'))
+    ) {
+      window.setStatusKey(text, cls);
+      return;
+    }
     el.textContent = __tMaybe(text);
     el.className = cls || '';
   }
