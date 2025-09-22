@@ -142,7 +142,21 @@
       <div id="note" class="muted status-note" data-i18n="diag.checking_env">Проверяем окружение…</div>
 
       <!-- Remote audio sink for incoming RTP audio track -->
-      <audio id="remoteAudio" controls autoplay playsinline></audio>
+      <audio id="remoteAudio" autoplay playsinline hidden></audio>
+
+      <!-- Option A: Waveform (canvas) -->
+      <canvas id="waveformCanvas" width="640" height="80" style="width:100%;background:#0b1220;border-radius:8px;margin-top:8px"></canvas>
+
+      <!-- Option B: Spectrum bars (canvas) -->
+      <canvas id="spectrumCanvas" width="640" height="80" style="width:100%;background:#0b1220;border-radius:8px;margin-top:8px" class="hidden"></canvas>
+
+      <!-- Option C: LED level bars -->
+      <div id="ledBars" style="display:flex;gap:4px;align-items:flex-end;height:80px;margin-top:8px" class="hidden">
+        <div class="bar" style="flex:1;background:#22c55e;border-radius:4px 4px 0 0;height:20%"></div>
+        <div class="bar" style="flex:1;background:#3b82f6;border-radius:4px 4px 0 0;height:40%"></div>
+        <div class="bar" style="flex:1;background:#f59e0b;border-radius:4px 4px 0 0;height:60%"></div>
+        <div class="bar" style="flex:1;background:#ef4444;border-radius:4px 4px 0 0;height:30%"></div>
+      </div>
     </div>
 
     <!-- Controls: call start/answer/hangup and share link -->
