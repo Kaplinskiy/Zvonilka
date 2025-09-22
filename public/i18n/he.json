@@ -20,7 +20,7 @@
   "label.invite_link": "קישור הזמנה",
 
   "howto.title": "איך להתקשר",
-  "howto.under_the_hood": "מאחורי הקלעים",
+  "howto.under_the_hood": "השיחות משתמשות בסטנדרט WebRTC ומוצפנות. אנו משתמשים רק בממסר (TURN) על פורט 443/TCP כדי שזה יעבוד גם תחת מגבלות רשת מחמירות.",
   "howto.if_no_connect": "אם אין חיבור",
   "howto.step_site": "היכנס לאתר",
   "howto.step_start": "לחץ על \"התחל שיחה\" ושלח את הקישור שנוצר לשותף.",
