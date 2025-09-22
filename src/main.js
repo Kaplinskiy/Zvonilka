@@ -357,15 +357,18 @@ function renderLangSwitch(active) {
     try { cleanupRTC(reason); } catch {}
     clearInterval(pingTimer);
 
-    // Reset buttons and UI to initial state.
-    const hasRoom = !!parseRoom();
+    // Reset buttons and UI to allow starting a new call immediately.
     if (btnHang) btnHang.disabled = true;
-    if (btnCall) btnCall.classList.toggle('hidden', hasRoom);
-    if (btnAnswer) btnAnswer.classList.toggle('hidden', !hasRoom);
+    if (btnCall) {
+      btnCall.classList.remove('hidden');
+      btnCall.disabled = false;
+    }
+    if (btnAnswer) btnAnswer.classList.add('hidden');
     if (shareWrap) shareWrap.classList.add('hidden');
     setStatusKey('call.ended', 'warn-txt');
     if (noteEl) noteEl.textContent = '';
     offerAttempted = false;
+    role = null; roomId = null;
   }
 
   // --- INITIALIZATION BASED ON URL PARAMETERS ---
