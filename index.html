@@ -72,16 +72,16 @@
     .sep{height:1px;background:#22324a;margin:10px 0}
     .btnbar{display:flex;flex-wrap:wrap;gap:var(--gap)}
     .btnbar > *{flex:1 1 240px}
-    /* Make top action buttons full width */
+    /* Make top action buttons full width and pinned to full row */
+    .topline { display:grid; grid-template-columns: 1fr auto; gap: var(--gap); align-items:center; }
     .topline .btnbar {
+      grid-column: 1 / -1;   /* span across both columns */
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: var(--gap);
       width: 100%;
     }
-    .topline .btnbar > button {
-      width: 100%;
-    }
+    .topline .btnbar > button { width: 100%; }
     .badge{display:inline-block;padding:4px 8px;border-radius:8px;background:#102035;border:1px solid #20314a;color:#b6c7da;font-size:12px}
     dialog{border:1px solid var(--stroke);background:var(--card);color:var(--fg);border-radius:16px;max-width:720px;width:92%;padding:0;box-shadow:0 10px 40px rgba(0,0,0,.55)}
     dialog::backdrop{background:rgba(0,0,0,.6)}
@@ -91,7 +91,7 @@
     .list {margin:0;padding-left:18px;color:var(--fg)}
     .list li{margin:.3em 0}
     .link{color:#99c0ff;text-decoration:none}
-    .topline{display:grid;grid-template-columns:1fr auto;gap:var(--gap);align-items:center}
+    /* .topline rule replaced above */
     .topline .spacer{display:none}
     .status-area{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
     .status-note{min-width:260px}
