@@ -167,6 +167,8 @@ function renderLangSwitch(active) {
 
       // Style LED container: one-third width centered
       if (ledWrap) { ledWrap.style.width = '33.33%'; ledWrap.style.margin = '8px auto 0'; }
+      if (ledWrap) ledWrap.style.display = 'flex';
+      if (callTimerEl) callTimerEl.style.display = 'block';
 
       const spData = new Uint8Array(analyser.frequencyBinCount);
 
@@ -194,6 +196,8 @@ function renderLangSwitch(active) {
   function stopAudioViz(){
     try { if (__audioViz.raf) cancelAnimationFrame(__audioViz.raf); } catch {}
     try { if (__audioViz.ctx) __audioViz.ctx.close(); } catch {}
+    if (ledWrap) ledWrap.style.display = 'none';
+    if (callTimerEl) callTimerEl.style.display = 'none';
     __audioViz = { ctx:null, analyser:null, srcNode:null, raf:null };
     stopCallTimer();
   }
