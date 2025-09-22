@@ -39,15 +39,15 @@
   /**
    * Waits until the WebSocket connection is open or times out.
    * Polls every 50ms up to the specified timeout.
-   * @param {number} timeoutMs - Timeout in milliseconds (default 3000ms)
+   * @param {number} timeoutMs - Timeout in milliseconds (default 1000ms)
    * @returns {Promise<void>} Resolves when WebSocket is open, rejects on timeout
    */
-  function waitWSOpen(timeoutMs = 3000) {
+  function waitWSOpen(timeoutMs = 1000) {
     if (isWSOpen()) return Promise.resolve();
     return new Promise((resolve, reject) => {
       const started = Date.now();
       const timer = setInterval(() => {
-        if (isWSOpen()) {
+        if (_ws && (_ws.readyState === WebSocket.OPEN || _ws.readyState === WebSocket.CONNECTING)) {
           clearInterval(timer);
           resolve();
           return;
@@ -99,7 +99,7 @@ function connectWS(role, roomId, onMessage) {
   return new Promise((resolve, reject) => {
     // Internal state for connection attempts and backoff
     let attempt = 0;                 // Number of connection attempts
-    const maxDelay = 10_000;         // Maximum backoff delay in ms
+    const maxDelay = 3_000;         // Maximum backoff delay in ms
     let resolvedHello = false;       // Flag to track if 'hello' message received
     let closedCleanly = false;       // Flag to indicate clean socket closure
 
@@ -166,7 +166,9 @@ function connectWS(role, roomId, onMessage) {
         // Automatic reconnect with exponential backoff up to maxDelay
         if (!closedCleanly) {
           attempt += 1;
-          const delay = Math.min(500 * 2 ** (attempt - 1), maxDelay);
+          const base = 200;
+          const jitter = Math.floor(Math.random() * 100);
+          const delay = Math.min(base * 2 ** (attempt - 1) + jitter, maxDelay);
           if (typeof window.setStatusKey === 'function') {
             window.setStatusKey('signal.recovering', 'warn');
           } else if (typeof window.setStatus === 'function') {
