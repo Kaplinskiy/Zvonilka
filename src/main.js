@@ -118,9 +118,36 @@ function renderLangSwitch(active) {
   const noteEl = document.getElementById('note');
   const roleBadge = document.getElementById('roleBadge');
   const audioEl = document.getElementById('remoteAudio');
+  const ledWrap  = document.getElementById('ledBars');
+  const callTimerEl = document.getElementById('callTimer');
 
-  // --- AUDIO VISUALIZERS (waveform, spectrum, LED bars)
+  // --- AUDIO VISUALIZER (LED bars only) + CALL TIMER ---
   let __audioViz = { ctx: null, analyser: null, srcNode: null, raf: null };
+  let __callTimer = { start: null, int: null };
+
+  function formatDuration(ms){
+    const total = Math.max(0, Math.floor(ms/1000));
+    const h = Math.floor(total/3600);
+    const m = Math.floor((total%3600)/60);
+    const s = total%60;
+    const pad = (n)=>String(n).padStart(2,'0');
+    return h>0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+  }
+
+  function startCallTimer(){
+    if (!callTimerEl) return;
+    __callTimer.start = Date.now();
+    callTimerEl.textContent = '0:00';
+    clearInterval(__callTimer.int);
+    __callTimer.int = setInterval(()=>{
+      callTimerEl.textContent = formatDuration(Date.now()-__callTimer.start);
+    }, 1000);
+  }
+  function stopCallTimer(){
+    clearInterval(__callTimer.int);
+    __callTimer.int = null; __callTimer.start = null;
+    if (callTimerEl) callTimerEl.textContent = '';
+  }
 
   async function startAudioViz(stream) {
     try {
@@ -134,72 +161,16 @@ function renderLangSwitch(active) {
       analyser.fftSize = 2048;
       analyser.minDecibels = -95;
       analyser.maxDecibels = -5;
-      analyser.smoothingTimeConstant = 0.7; // more responsive
+      analyser.smoothingTimeConstant = 0.7;
       src.connect(analyser);
       __audioViz = { ctx, analyser, srcNode: src, raf: null };
 
-      const wfCanvas = document.getElementById('waveformCanvas');
-      const spCanvas = document.getElementById('spectrumCanvas');
-      const ledWrap  = document.getElementById('ledBars');
-      // Center and size visuals to one-third width
-      const oneThird = '33.33%';
-      [wfCanvas, spCanvas, ledWrap].forEach(el => {
-        if (!el) return;
-        el.style.width = oneThird;
-        el.style.margin = '8px auto 0';
-      });
+      // Style LED container: one-third width centered
+      if (ledWrap) { ledWrap.style.width = '33.33%'; ledWrap.style.margin = '8px auto 0'; }
 
-      function prepCanvas(cnv){
-        if (!cnv) return { cnv:null, g:null };
-        const dpr = window.devicePixelRatio || 1;
-        const w = cnv.clientWidth | 0;
-        const h = cnv.clientHeight | 0;
-        if (w<=0 || h<=0) return { cnv, g:null };
-        if (cnv.width !== w*dpr || cnv.height !== h*dpr) { cnv.width = w*dpr; cnv.height = h*dpr; }
-        const g = cnv.getContext('2d');
-        g.setTransform(dpr,0,0,dpr,0,0);
-        return { cnv, g, w, h };
-      }
-
-      const wfData = new Uint8Array(analyser.fftSize);
       const spData = new Uint8Array(analyser.frequencyBinCount);
 
       function draw(){
-        // Waveform
-        if (wfCanvas) {
-          const {g,w,h} = prepCanvas(wfCanvas);
-          if (g && w && h) {
-            analyser.getByteTimeDomainData(wfData);
-            g.clearRect(0,0,w,h);
-            g.beginPath();
-            const mid = h/2;
-            g.moveTo(0, mid);
-            for (let x=0; x<w; x++) {
-              const i = (x / w * wfData.length)|0;
-              const v = (wfData[i]-128)/128; // -1..1
-              const y = mid + v * (h*0.8); // higher sensitivity
-              g.lineTo(x, y);
-            }
-            g.lineWidth = 2; g.strokeStyle = '#3b82f6'; g.stroke();
-          }
-        }
-        // Spectrum
-        if (spCanvas) {
-          const {g,w,h} = prepCanvas(spCanvas);
-          if (g && w && h) {
-            analyser.getByteFrequencyData(spData);
-            g.clearRect(0,0,w,h);
-            const bars = 48; const step = Math.floor(spData.length / bars); const bw = w / bars;
-            for (let b=0; b<bars; b++) {
-              const raw = spData[b*step] / 255;
-              const v = Math.pow(raw, 0.6); // boost quiet parts
-              const bh = Math.max(2, v*h);
-              const x = b*bw;
-              g.fillStyle = '#22c55e'; g.fillRect(x, h-bh, bw*0.9, bh);
-            }
-          }
-        }
-        // LED bars
         if (ledWrap) {
           const bars = ledWrap.querySelectorAll('.bar');
           if (bars && bars.length) {
@@ -208,7 +179,7 @@ function renderLangSwitch(active) {
             for (let i=0;i<bars.length;i++) {
               let sum = 0; for (let j=i*seg; j<(i+1)*seg; j++) sum += spData[j];
               const avg = sum / seg / 255;
-              const v = Math.min(1, Math.pow(avg, 0.6) * 1.6); // louder
+              const v = Math.min(1, Math.pow(avg, 0.6) * 1.6);
               bars[i].style.height = Math.round(Math.max(0.08, v) * 100) + '%';
             }
           }
@@ -216,6 +187,7 @@ function renderLangSwitch(active) {
         __audioViz.raf = requestAnimationFrame(draw);
       }
       draw();
+      startCallTimer();
     } catch {}
   }
 
@@ -223,6 +195,7 @@ function renderLangSwitch(active) {
     try { if (__audioViz.raf) cancelAnimationFrame(__audioViz.raf); } catch {}
     try { if (__audioViz.ctx) __audioViz.ctx.close(); } catch {}
     __audioViz = { ctx:null, analyser:null, srcNode:null, raf:null };
+    stopCallTimer();
   }
 
   const btnCall = document.getElementById('btnCall');
