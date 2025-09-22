@@ -119,6 +119,98 @@ function renderLangSwitch(active) {
   const roleBadge = document.getElementById('roleBadge');
   const audioEl = document.getElementById('remoteAudio');
 
+  // --- AUDIO VISUALIZERS (waveform, spectrum, LED bars)
+  let __audioViz = { ctx: null, analyser: null, srcNode: null, raf: null };
+
+  function startAudioViz(stream) {
+    try {
+      if (!stream) return;
+      if (__audioViz.ctx) return; // already running
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      const ctx = new AudioCtx();
+      const src = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 2048;
+      analyser.smoothingTimeConstant = 0.85;
+      src.connect(analyser);
+      __audioViz = { ctx, analyser, srcNode: src, raf: null };
+
+      const wfCanvas = document.getElementById('waveformCanvas');
+      const spCanvas = document.getElementById('spectrumCanvas');
+      const ledWrap  = document.getElementById('ledBars');
+
+      function prepCanvas(cnv){
+        if (!cnv) return { cnv:null, g:null };
+        const dpr = window.devicePixelRatio || 1;
+        const w = cnv.clientWidth | 0;
+        const h = cnv.clientHeight | 0;
+        if (w<=0 || h<=0) return { cnv, g:null };
+        if (cnv.width !== w*dpr || cnv.height !== h*dpr) { cnv.width = w*dpr; cnv.height = h*dpr; }
+        const g = cnv.getContext('2d');
+        g.setTransform(dpr,0,0,dpr,0,0);
+        return { cnv, g, w, h };
+      }
+
+      const wfData = new Uint8Array(analyser.fftSize);
+      const spData = new Uint8Array(analyser.frequencyBinCount);
+
+      function draw(){
+        // Waveform
+        if (wfCanvas) {
+          const {g,w,h} = prepCanvas(wfCanvas);
+          if (g && w && h) {
+            analyser.getByteTimeDomainData(wfData);
+            g.clearRect(0,0,w,h);
+            g.beginPath();
+            const mid = h/2;
+            g.moveTo(0, mid);
+            for (let x=0; x<w; x++) {
+              const i = (x / w * wfData.length)|0;
+              const v = (wfData[i]-128)/128; // -1..1
+              const y = mid + v * (h*0.45);
+              g.lineTo(x, y);
+            }
+            g.lineWidth = 2; g.strokeStyle = '#3b82f6'; g.stroke();
+          }
+        }
+        // Spectrum
+        if (spCanvas && !spCanvas.classList.contains('hidden')) {
+          const {g,w,h} = prepCanvas(spCanvas);
+          if (g && w && h) {
+            analyser.getByteFrequencyData(spData);
+            g.clearRect(0,0,w,h);
+            const bars = 48; const step = Math.floor(spData.length / bars); const bw = w / bars;
+            for (let b=0; b<bars; b++) {
+              const v = spData[b*step] / 255; const bh = Math.max(2, v*h); const x = b*bw;
+              g.fillStyle = '#22c55e'; g.fillRect(x, h-bh, bw*0.9, bh);
+            }
+          }
+        }
+        // LED bars
+        if (ledWrap && !ledWrap.classList.contains('hidden')) {
+          const bars = ledWrap.querySelectorAll('.bar');
+          if (bars && bars.length) {
+            analyser.getByteFrequencyData(spData);
+            const seg = Math.floor(spData.length / bars.length);
+            for (let i=0;i<bars.length;i++) {
+              let sum = 0; for (let j=i*seg; j<(i+1)*seg; j++) sum += spData[j];
+              const avg = sum / seg / 255; const h = Math.max(0.1, Math.min(1, avg * 1.2));
+              bars[i].style.height = Math.round(h*100) + '%';
+            }
+          }
+        }
+        __audioViz.raf = requestAnimationFrame(draw);
+      }
+      draw();
+    } catch {}
+  }
+
+  function stopAudioViz(){
+    try { if (__audioViz.raf) cancelAnimationFrame(__audioViz.raf); } catch {}
+    try { if (__audioViz.ctx) __audioViz.ctx.close(); } catch {}
+    __audioViz = { ctx:null, analyser:null, srcNode:null, raf:null };
+  }
+
   const btnCall = document.getElementById('btnCall');
   const btnAnswer = document.getElementById('btnAnswer');
   const btnHang = document.getElementById('btnHang');
@@ -341,6 +433,7 @@ function renderLangSwitch(active) {
     await getMic();
     createPC((s) => {
       if (audioEl) audioEl.srcObject = s;
+      try { startAudioViz(s); } catch {}
       logT('webrtc', 'webrtc.remote_track');
     });
     setStatusKey('room.ready_share_link', 'ok');
@@ -356,6 +449,7 @@ function renderLangSwitch(active) {
     try { wsClose(); } catch {}
     try { cleanupRTC(reason); } catch {}
     clearInterval(pingTimer);
+    stopAudioViz();
 
     // Reset buttons and UI to allow starting a new call immediately.
     if (btnHang) btnHang.disabled = true;
@@ -441,6 +535,7 @@ function renderLangSwitch(active) {
     if (pendingOffer) {
       await acceptIncoming(pendingOffer, (s) => {
         if (audioEl) audioEl.srcObject = s;
+        try { startAudioViz(s); } catch {}
         logT('webrtc', 'webrtc.remote_track');
       });
       pendingOffer = null;
