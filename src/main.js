@@ -369,6 +369,9 @@ function renderLangSwitch(active) {
     if (noteEl) noteEl.textContent = '';
     offerAttempted = false;
     role = null; roomId = null;
+    // Final guard: ensure Start is visible and enabled
+    if (btnCall) { btnCall.classList.remove('hidden'); btnCall.disabled = false; }
+    if (btnAnswer) btnAnswer.classList.add('hidden');
   }
 
   // --- INITIALIZATION BASED ON URL PARAMETERS ---
