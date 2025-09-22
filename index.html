@@ -72,6 +72,16 @@
     .sep{height:1px;background:#22324a;margin:10px 0}
     .btnbar{display:flex;flex-wrap:wrap;gap:var(--gap)}
     .btnbar > *{flex:1 1 240px}
+    /* Make top action buttons full width */
+    .topline .btnbar {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--gap);
+      width: 100%;
+    }
+    .topline .btnbar > button {
+      width: 100%;
+    }
     .badge{display:inline-block;padding:4px 8px;border-radius:8px;background:#102035;border:1px solid #20314a;color:#b6c7da;font-size:12px}
     dialog{border:1px solid var(--stroke);background:var(--card);color:var(--fg);border-radius:16px;max-width:720px;width:92%;padding:0;box-shadow:0 10px 40px rgba(0,0,0,.55)}
     dialog::backdrop{background:rgba(0,0,0,.6)}
@@ -122,7 +132,7 @@
         </div>
         <div class="spacer"></div>
         <div id="lang-switch" class="lang-switch"></div>
-        <div class="btnbar" style="flex:0 0 auto;gap:8px">
+        <div class="btnbar">
           <button id="btnHowTo" class="ghost" data-i18n="menu.howto">📘 Инструкция</button>
           <button id="btnAbout" class="ghost" data-i18n="menu.about">ℹ️ О программе</button>
           <button id="btnDebug" class="ghost" data-i18n="menu.debug">🛠️ Отладка</button>
