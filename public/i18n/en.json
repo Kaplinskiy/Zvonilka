@@ -22,6 +22,7 @@
   "howto.title": "How to Call",
   "howto.under_the_hood": "Under the Hood",
   "howto.if_no_connect": "If it doesn't connect",
+  "howto.turn_note": "Calls use the WebRTC standard and are encrypted. We only use a relay (TURN) on port 443/TCP so it works even under strict network restrictions.",
   "howto.step_site": "Go to the site",
   "howto.step_start": "Click “Start Call” and send the generated link to your partner.",
   "howto.step_answer": "Ask your partner to open the link in an external browser and click “Answer Call”.",
