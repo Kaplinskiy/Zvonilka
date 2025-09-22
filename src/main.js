@@ -132,13 +132,22 @@ function renderLangSwitch(active) {
       const src = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 2048;
-      analyser.smoothingTimeConstant = 0.85;
+      analyser.minDecibels = -95;
+      analyser.maxDecibels = -5;
+      analyser.smoothingTimeConstant = 0.7; // more responsive
       src.connect(analyser);
       __audioViz = { ctx, analyser, srcNode: src, raf: null };
 
       const wfCanvas = document.getElementById('waveformCanvas');
       const spCanvas = document.getElementById('spectrumCanvas');
       const ledWrap  = document.getElementById('ledBars');
+      // Center and size visuals to one-third width
+      const oneThird = '33.33%';
+      [wfCanvas, spCanvas, ledWrap].forEach(el => {
+        if (!el) return;
+        el.style.width = oneThird;
+        el.style.margin = '8px auto 0';
+      });
 
       function prepCanvas(cnv){
         if (!cnv) return { cnv:null, g:null };
@@ -168,7 +177,7 @@ function renderLangSwitch(active) {
             for (let x=0; x<w; x++) {
               const i = (x / w * wfData.length)|0;
               const v = (wfData[i]-128)/128; // -1..1
-              const y = mid + v * (h*0.45);
+              const y = mid + v * (h*0.8); // higher sensitivity
               g.lineTo(x, y);
             }
             g.lineWidth = 2; g.strokeStyle = '#3b82f6'; g.stroke();
@@ -182,7 +191,10 @@ function renderLangSwitch(active) {
             g.clearRect(0,0,w,h);
             const bars = 48; const step = Math.floor(spData.length / bars); const bw = w / bars;
             for (let b=0; b<bars; b++) {
-              const v = spData[b*step] / 255; const bh = Math.max(2, v*h); const x = b*bw;
+              const raw = spData[b*step] / 255;
+              const v = Math.pow(raw, 0.6); // boost quiet parts
+              const bh = Math.max(2, v*h);
+              const x = b*bw;
               g.fillStyle = '#22c55e'; g.fillRect(x, h-bh, bw*0.9, bh);
             }
           }
@@ -195,8 +207,9 @@ function renderLangSwitch(active) {
             const seg = Math.floor(spData.length / bars.length);
             for (let i=0;i<bars.length;i++) {
               let sum = 0; for (let j=i*seg; j<(i+1)*seg; j++) sum += spData[j];
-              const avg = sum / seg / 255; const h = Math.max(0.1, Math.min(1, avg * 1.2));
-              bars[i].style.height = Math.round(h*100) + '%';
+              const avg = sum / seg / 255;
+              const v = Math.min(1, Math.pow(avg, 0.6) * 1.6); // louder
+              bars[i].style.height = Math.round(Math.max(0.08, v) * 100) + '%';
             }
           }
         }
