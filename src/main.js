@@ -122,12 +122,13 @@ function renderLangSwitch(active) {
   // --- AUDIO VISUALIZERS (waveform, spectrum, LED bars)
   let __audioViz = { ctx: null, analyser: null, srcNode: null, raf: null };
 
-  function startAudioViz(stream) {
+  async function startAudioViz(stream) {
     try {
       if (!stream) return;
       if (__audioViz.ctx) return; // already running
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       const ctx = new AudioCtx();
+      try { await ctx.resume?.(); } catch {}
       const src = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 2048;
@@ -174,7 +175,7 @@ function renderLangSwitch(active) {
           }
         }
         // Spectrum
-        if (spCanvas && !spCanvas.classList.contains('hidden')) {
+        if (spCanvas) {
           const {g,w,h} = prepCanvas(spCanvas);
           if (g && w && h) {
             analyser.getByteFrequencyData(spData);
@@ -187,7 +188,7 @@ function renderLangSwitch(active) {
           }
         }
         // LED bars
-        if (ledWrap && !ledWrap.classList.contains('hidden')) {
+        if (ledWrap) {
           const bars = ledWrap.querySelectorAll('.bar');
           if (bars && bars.length) {
             analyser.getByteFrequencyData(spData);
@@ -431,9 +432,9 @@ function renderLangSwitch(active) {
     setStatusKey('status.preparing', 'warn-txt');
     btnCall && (btnCall.disabled = true);
     await getMic();
-    createPC((s) => {
+    createPC(async (s) => {
       if (audioEl) audioEl.srcObject = s;
-      try { startAudioViz(s); } catch {}
+      try { await startAudioViz(s); } catch {}
       logT('webrtc', 'webrtc.remote_track');
     });
     setStatusKey('room.ready_share_link', 'ok');
@@ -533,9 +534,9 @@ function renderLangSwitch(active) {
     else logT('warn', 'warn.ws_already_connected_callee');
 
     if (pendingOffer) {
-      await acceptIncoming(pendingOffer, (s) => {
+      await acceptIncoming(pendingOffer, async (s) => {
         if (audioEl) audioEl.srcObject = s;
-        try { startAudioViz(s); } catch {}
+        try { await startAudioViz(s); } catch {}
         logT('webrtc', 'webrtc.remote_track');
       });
       pendingOffer = null;
