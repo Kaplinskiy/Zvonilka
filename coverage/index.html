@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="en">
 
@@ -13,6 +12,11 @@
         .coverage-summary .sorter {
             background-image: url(sort-arrow-sprite.png);
         }
+        /* Video circle + dock */
+        #videoWrap{ display:none; width:min(56vh,56vw); aspect-ratio:1/1; margin:16px auto 0; border-radius:50%; overflow:hidden; background:#0b1220; border:1px solid var(--stroke) }
+        #videoWrap video{ width:100%; height:100%; object-fit:cover }
+        #videoDock{ display:none; justify-content:center; gap:12px; margin:10px auto 0; }
+        #videoDock .ghost{ min-width:140px }
     </style>
 </head>
     
@@ -188,4 +192,3 @@
         <script src="block-navigation.js"></script>
     </body>
 </html>
-    
