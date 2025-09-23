@@ -101,6 +101,8 @@
   "debug.signal_recv_bye": "התקבל bye",
   "debug.no_room_param_caller": "אין room ב-URL — מצב יוזם",
   "warn.ws_already_connected_callee": "WS כבר מחובר (callee)",
-  "webrtc.remote_track": "התקבל track מרוחק"
-
+  "webrtc.remote_track": "התקבל track מרוחק",
+  "video.toggle": "🎥 וידאו",
+  "video.flip": "🔄 מצלמה",
+  "video.mic": "🎙️ מיקרופון"
 }

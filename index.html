@@ -95,6 +95,11 @@
     .topline .spacer{display:none}
     .status-area{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
     .status-note{min-width:260px}
+    /* Video circle + dock */
+    #videoWrap{ display:none; width:min(56vh,56vw); aspect-ratio:1/1; margin:16px auto 0; border-radius:50%; overflow:hidden; background:#0b1220; border:1px solid var(--stroke) }
+    #videoWrap video{ width:100%; height:100%; object-fit:cover }
+    #videoDock{ display:none; justify-content:center; gap:12px; margin:10px auto 0; }
+    #videoDock .ghost{ min-width:140px }
     /* RTL support */
     html[dir="rtl"] body{ text-align:right; }
     html[dir="rtl"] .wrap{ direction:rtl; }
@@ -160,6 +165,16 @@
         <button id="btnCall"   class="primary big" data-i18n="btn.start_call">📞 Начать звонок</button>
         <button id="btnAnswer" class="big hidden" data-i18n="btn.answer_call">✅ Ответить на звонок</button>
         <button id="btnHang"   class="warn big" disabled data-i18n="btn.hangup">🛑 Завершить</button>
+      </div>
+      <!-- Video circle (shown only in video mode) -->
+      <div id="videoWrap">
+        <video id="remoteVideo" autoplay playsinline></video>
+      </div>
+      <!-- Neutral dock for video controls -->
+      <div id="videoDock" class="btnbar" style="justify-content:center">
+        <button id="btnVideoToggle" class="ghost" data-i18n="video.toggle">🎥 Видео</button>
+        <button id="btnCamFlip" class="ghost" data-i18n="video.flip">🔄 Камера</button>
+        <button id="btnMicToggle" class="ghost" data-i18n="video.mic">🎙️ Микрофон</button>
       </div>
 
       <div id="shareWrap" class="hidden" style="margin-top:var(--gap)">

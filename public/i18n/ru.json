@@ -101,5 +101,8 @@
   "debug.signal_recv_bye": "получен bye",
   "debug.no_room_param_caller": "нет room в URL — режим инициатор",
   "warn.ws_already_connected_callee": "WS уже подключён (callee)",
-  "webrtc.remote_track": "получен удалённый трек"
+  "webrtc.remote_track": "получен удалённый трек",
+  "video.toggle": "🎥 Видео",
+  "video.flip": "🔄 Камера",
+  "video.mic": "🎙️ Микрофон"
 }

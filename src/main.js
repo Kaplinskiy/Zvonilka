@@ -12,6 +12,7 @@ const STORAGE_KEY = 'lang';
 const SUPPORTED = ['ru', 'en', 'he'];
 const FALLBACK = 'en';
 
+
 /**
  * Detect the preferred language for the user.
  * Checks localStorage, then browser language, then falls back to default.
@@ -120,6 +121,28 @@ function renderLangSwitch(active) {
   const audioEl = document.getElementById('remoteAudio');
   const ledWrap  = document.getElementById('ledBars');
   const callTimerEl = document.getElementById('callTimer');
+  const videoWrap = document.getElementById('videoWrap');
+  const videoDock = document.getElementById('videoDock');
+  const remoteVideo = document.getElementById('remoteVideo');
+  const btnVideoToggle = document.getElementById('btnVideoToggle');
+  const btnCamFlip = document.getElementById('btnCamFlip');
+  const btnMicToggle = document.getElementById('btnMicToggle');
+
+  let __videoMode = false;
+  let __camFacing = 'user';
+  let __remoteStream = null;
+
+  function bindRemoteStream(s) {
+    __remoteStream = s;
+    if (__videoMode && remoteVideo) remoteVideo.srcObject = s;
+  }
+
+  function setVideoMode(on){
+    __videoMode = !!on;
+    if (videoWrap) videoWrap.style.display = on ? 'block' : 'none';
+    if (videoDock) videoDock.style.display = on ? 'flex' : 'none';
+    if (on && remoteVideo && __remoteStream) remoteVideo.srcObject = __remoteStream;
+  }
 
   // --- AUDIO VISUALIZER (LED bars only) + CALL TIMER ---
   let __audioViz = { ctx: null, analyser: null, srcNode: null, raf: null };
@@ -424,6 +447,7 @@ function renderLangSwitch(active) {
     await getMic();
     createPC(async (s) => {
       if (audioEl) audioEl.srcObject = s;
+      bindRemoteStream(s);
       try { await startAudioViz(s); } catch {}
       logT('webrtc', 'webrtc.remote_track');
     });
@@ -441,6 +465,9 @@ function renderLangSwitch(active) {
     try { cleanupRTC(reason); } catch {}
     clearInterval(pingTimer);
     stopAudioViz();
+    setVideoMode(false);
+    __remoteStream = null;
+    if (remoteVideo) remoteVideo.srcObject = null;
 
     // Reset buttons and UI to allow starting a new call immediately.
     if (btnHang) btnHang.disabled = true;
@@ -526,6 +553,7 @@ function renderLangSwitch(active) {
     if (pendingOffer) {
       await acceptIncoming(pendingOffer, async (s) => {
         if (audioEl) audioEl.srcObject = s;
+        bindRemoteStream(s);
         try { await startAudioViz(s); } catch {}
         logT('webrtc', 'webrtc.remote_track');
       });
@@ -579,6 +607,23 @@ function renderLangSwitch(active) {
   };
 
   // --- APPLICATION BOOTSTRAP SEQUENCE ---
+
+  if (btnVideoToggle) btnVideoToggle.onclick = () => {
+    setVideoMode(!__videoMode);
+  };
+
+  if (btnCamFlip) btnCamFlip.onclick = () => {
+    __camFacing = (__camFacing === 'user') ? 'environment' : 'user';
+    if (noteEl) noteEl.textContent = 'camera: ' + __camFacing;
+  };
+
+  if (btnMicToggle) btnMicToggle.onclick = () => {
+    if (audioEl) audioEl.muted = !audioEl.muted;
+    if (noteEl) noteEl.textContent = audioEl && audioEl.muted
+      ? i18next.t('call.ended')
+      : i18next.t('common.ready');
+  };
+
   setStatusKey('status.initializing');
   try { renderEnv(); } catch {}
   logT('info', 'dev.client_loaded_vite');

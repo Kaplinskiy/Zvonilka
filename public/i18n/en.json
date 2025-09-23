@@ -101,6 +101,9 @@
   "debug.signal_recv_bye": "received bye",
   "debug.no_room_param_caller": "no room in URL — caller mode",
   "warn.ws_already_connected_callee": "WS already connected (callee)",
-  "webrtc.remote_track": "remote track received"
+  "webrtc.remote_track": "remote track received",
+  "video.toggle": "🎥 Video",
+  "video.flip": "🔄 Camera",
+  "video.mic": "🎙️ Microphone"
 
 }
