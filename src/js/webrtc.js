@@ -5,6 +5,8 @@
 (function () {
   // RTCPeerConnection instance
   let pc = null;
+  // Queue for remote ICE candidates that arrive before remote description is set
+  window.__REMOTE_ICE_Q ||= [];
   // MediaStream obtained from the local microphone
   let localStream = null;
   // Incoming offer that has not yet been processed
@@ -42,18 +44,27 @@
    * @param {RTCIceCandidateInit} c - ICE candidate object.
    */
   async function addRemoteIce(c){
-    if (!c) return;
+    if (!pc) return;
+    // если remoteDescription ещё нет — очередь
+    if (!pc.remoteDescription) { window.__REMOTE_ICE_Q.push(c); return; }
+    try { await pc.addIceCandidate(c); } catch {}
+  }
+  
+  async function applyAnswer(ans){
+    if (!pc) throw new Error('pc is not initialized');
+    // поддерживаем оба формата: объект {type,sdp} и сырой SDP/объект с sdp
+    const desc = (ans && ans.type) ? ans : { type: 'answer', sdp: (ans && ans.sdp) ? ans.sdp : ans };
+    await pc.setRemoteDescription(new RTCSessionDescription(desc));
+    // вылить отложенные ICE
     try {
-        if (pc && remoteDescApplied) {
-        // Add ICE candidate immediately if remote description is set
-        await pc.addIceCandidate(new RTCIceCandidate(c));
-        } else {
-        // Otherwise, queue the candidate for later addition
-        pendingRemoteICE.push(c);
+      if (Array.isArray(window.__REMOTE_ICE_Q) && window.__REMOTE_ICE_Q.length) {
+        for (const c of window.__REMOTE_ICE_Q.splice(0)) {
+          try { await pc.addIceCandidate(c); } catch {}
         }
+      }
     } catch {}
   }
-
+  window.applyAnswer = applyAnswer;
   /**
    * Applies the remote answer SDP to the peer connection.
    * After setting the remote description, any queued ICE candidates are added.
@@ -164,15 +175,15 @@
         window.addLog && window.addLog('webrtc', `state=${st}`);
         if (typeof window.setStatus === 'function') {
             if (st === 'connected') {
-            window.setStatusKey('status.in_call', 'ok');
+            window.setStatusKey && window.setStatusKey('status.in_call','ok');
             } else if (st === 'connecting') {
             window.setStatusKey('status.connecting', 'warn');
             } else if (st === 'disconnected') {
             window.setStatusKey('status.lost_recovering', 'warn');
             } else if (st === 'failed') {
-            window.setStatus(i18next.t('error.connection'), 'err');
+            window.setStatusKey && window.setStatusKey('error.connection','err');
             } else if (st === 'closed') {
-            window.setStatusKey('status.ended', 'warn');
+            window.setStatusKey && window.setStatusKey('status.ended','warn');
             }
         }
     };
