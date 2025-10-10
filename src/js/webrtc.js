@@ -128,6 +128,8 @@
       window.addLog && window.addLog('webrtc', 'create RTCPeerConnection ' + (cfg.iceTransportPolicy ? `(policy=${cfg.iceTransportPolicy})` : ''));
     } catch {}
     pc = new RTCPeerConnection(cfg);
+    // Ensure an explicit audio m= section with sendrecv for mobile (iOS/Safari stability)
+    try { pc.addTransceiver('audio', { direction: 'sendrecv' }); } catch {}
 
     // Extra diagnostics
     pc.onicecandidateerror = (e) => {
