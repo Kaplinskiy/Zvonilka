@@ -327,24 +327,7 @@ function renderLangSwitch(active) {
           memberId = msg.memberId || memberId;
           setStatusKey('ws.connected_room', 'ok', { room: (roomId || parseRoom() || '-') });
           logT('signal', 'debug.signal_recv_hello');
-          // If user is the caller and offer hasn't been sent, send an offer.
-          if (role === 'caller' && !offerAttempted) {
-            try {
-              if (typeof window.sendOfferIfPossible === 'function') {
-                await window.sendOfferIfPossible(true);
-                offerAttempted = true;
-                logT('webrtc', 'webrtc.offer_sent_caller');
-              } else if (typeof window.createAndSendOffer === 'function') {
-                await window.createAndSendOffer();
-                offerAttempted = true;
-                logT('webrtc', 'webrtc.offer_sent_via_helper');
-              } else {
-                logT('warn', 'warn.no_offer_sender_impl');
-              }
-            } catch (e) {
-              logT('error', 'error.offer_send_failed', { msg: (e?.message || String(e)) });
-            }
-          }
+          // Do NOT send offer on hello; wait for member.joined/peer.joined to ensure the peer is present.
           break;
         }
         case 'member.joined': {
