@@ -395,9 +395,26 @@ function renderLangSwitch(active) {
         case 'offer': {
           logT('signal', 'debug.signal_recv_offer');
           pendingOffer = msg.payload || msg.offer || null;
-          if (pendingOffer) {
-            btnAnswer && btnAnswer.classList.remove('hidden');
-            setStatusKey('call.offer_received_click_answer', 'warn');
+          // Показать кнопку "Ответить" для ручного сценария
+          if (btnAnswer) btnAnswer.classList.remove('hidden');
+          // Если мы callee и оффер уже пришёл — принять автоматически
+          if (role === 'callee' && pendingOffer) {
+            try {
+              await acceptIncoming(pendingOffer, async (s) => {
+                if (audioEl) audioEl.srcObject = s;
+                bindRemoteStream(s);
+                try { await startAudioViz(s); } catch {}
+                logT('webrtc', 'webrtc.remote_track');
+              });
+              pendingOffer = null;
+              if (btnHang) btnHang.disabled = false;
+              if (btnAnswer) btnAnswer.classList.add('hidden');
+              setStatusKey('status.in_call', 'ok');
+            } catch (e) {
+              logT('error', 'error.apply_answer', { msg: (e?.message || String(e)) });
+            }
+          } else if (!pendingOffer) {
+            setStatusKey('signal.waiting_offer', 'warn');
           }
           break;
         }
