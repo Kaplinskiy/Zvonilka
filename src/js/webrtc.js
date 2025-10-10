@@ -15,8 +15,6 @@
   let offerSent = false;
   // Flag indicating whether the remote description has been applied to the peer connection
   let remoteDescApplied = false;
-  // Queue of ICE candidates received before remote description was set
-  let pendingRemoteICE = [];
 
   /**
    * Translation helper function.
@@ -65,24 +63,6 @@
     } catch {}
   }
   window.applyAnswer = applyAnswer;
-  /**
-   * Applies the remote answer SDP to the peer connection.
-   * After setting the remote description, any queued ICE candidates are added.
-   * @param {RTCSessionDescriptionInit} desc - The remote session description (answer).
-   */
-  async function applyAnswer(desc){
-    if (!desc) return;
-    try{
-        if (!pc) return;
-        await pc.setRemoteDescription(new RTCSessionDescription(desc));
-        remoteDescApplied = true;
-        // Add any ICE candidates that were received before remote description was set
-        while (pendingRemoteICE.length){
-        const x = pendingRemoteICE.shift();
-        try{ await pc.addIceCandidate(new RTCIceCandidate(x)); }catch{}
-        }
-    }catch{}
-  }
 
   /**
    * Requests access to the user's microphone and returns the audio MediaStream.
@@ -244,10 +224,11 @@
       await pc.setLocalDescription(answer);
       window.wsSend && window.wsSend('answer', answer);
       remoteDescApplied = true;
-      // Add any ICE candidates that arrived before remote description was set
-      while (pendingRemoteICE.length) {
-        const c = pendingRemoteICE.shift();
-        try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch {}
+      // Flush queued ICE that arrived before remote description was set
+      if (Array.isArray(window.__REMOTE_ICE_Q) && window.__REMOTE_ICE_Q.length) {
+        for (const c of window.__REMOTE_ICE_Q.splice(0)) {
+          try { await pc.addIceCandidate(c); } catch {}
+        }
       }
     } catch (e) {
       window.addLog && window.addLog('error', 'acceptIncoming: ' + (e.message || e));
@@ -270,7 +251,6 @@
       pendingOffer = null;
       offerSent = false;
       remoteDescApplied = false;
-      pendingRemoteICE = [];
       window.addLog && window.addLog('info', 'cleanup ' + reason);
     } catch {}
   }
