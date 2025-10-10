@@ -85,20 +85,33 @@
    * Retrieves the ICE server configuration for the RTCPeerConnection.
    * Uses a TURN server configuration from window.__TURN__ if available,
    * otherwise falls back to a default Google STUN server.
-   * If forceRelay is set, the ICE transport policy is set to 'relay' to force TURN usage.
+   * On mobile, enforces relay policy and TURN over TCP/443.
    * @returns {RTCConfiguration} The configuration object for RTCPeerConnection.
    */
   function getIceConfig(){
-    // Use TURN configuration from global window.__TURN__ if defined.
-    // Expected format: { iceServers: [...], forceRelay: true|false }
     const fallback = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
     const t = (typeof window !== 'undefined') ? window.__TURN__ : null;
+    const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent || '');
     if (t && Array.isArray(t.iceServers) && t.iceServers.length) {
-      const cfg = { iceServers: t.iceServers.slice() };
-      if (t.forceRelay) cfg.iceTransportPolicy = 'relay';
+      // clone and normalize TURN urls
+      const norm = t.iceServers.map(s => ({...s})).map(s => {
+        let urls = s.urls;
+        if (!urls) return s;
+        const list = Array.isArray(urls) ? urls : [urls];
+        s.urls = list.map(u => {
+          if (!t.forceRelay) return u;
+          // ensure tcp transport for relayed paths
+          if (/^turns?:/i.test(u) && !/transport=tcp/i.test(u)) {
+            return u + (u.includes('?') ? '&' : '?') + 'transport=tcp';
+          }
+          return u;
+        });
+        return s;
+      });
+      const cfg = { iceServers: norm };
+      if (t.forceRelay || isMobile) cfg.iceTransportPolicy = 'relay';
       return cfg;
     }
-    // Default STUN server configuration
     return fallback;
   }
 
@@ -115,6 +128,26 @@
       window.addLog && window.addLog('webrtc', 'create RTCPeerConnection ' + (cfg.iceTransportPolicy ? `(policy=${cfg.iceTransportPolicy})` : ''));
     } catch {}
     pc = new RTCPeerConnection(cfg);
+
+    // Extra diagnostics
+    pc.onicecandidateerror = (e) => {
+      try { window.addLog && window.addLog('webrtc', `icecandidateerror code=${e.errorCode} text=${e.errorText||''} url=${e.url||''}`); } catch {}
+    };
+    async function logSelectedPair(label){
+      try {
+        const stats = await pc.getStats();
+        stats.forEach(r => {
+          if (r.type === 'transport' && r.selectedCandidatePairId) {
+            const pair = stats.get(r.selectedCandidatePairId);
+            const local = pair && stats.get(pair.localCandidateId);
+            const remote = pair && stats.get(pair.remoteCandidateId);
+            if (pair && local && remote) {
+              window.addLog && window.addLog('webrtc', `${label}: selected=${pair.nominated} local(${local.candidateType}/${local.protocol}) -> remote(${remote.candidateType}/${remote.protocol})`);
+            }
+          }
+        });
+      } catch {}
+    }
 
     // Send ICE candidates to the signaling server as they are gathered
     pc.onicecandidate = (e) => {
@@ -134,19 +167,24 @@
 
     // Monitor ICE connection state changes and update UI status accordingly
     pc.oniceconnectionstatechange = () => {
-        const st = pc.iceConnectionState;
-        window.addLog && window.addLog('webrtc', `ice=${st}`);
-        if (typeof window.setStatus === 'function') {
-            if (st === 'connected') {
-            window.setStatusKey('status.in_call', 'ok');
-            } else if (st === 'checking') {
-            window.setStatusKey('status.connecting', 'warn');
-            } else if (st === 'disconnected') {
-            window.setStatusKey('status.lost_recovering', 'warn');
-            } else if (st === 'failed') {
-            window.setStatus(i18next.t('error.connection'), 'err');
-            }
-        }
+      const st = pc.iceConnectionState;
+      window.addLog && window.addLog('webrtc', `ice=${st}`);
+      if (st === 'connected') {
+        logSelectedPair('connected');
+        window.setStatusKey && window.setStatusKey('status.in_call','ok');
+      } else if (st === 'checking') {
+        window.setStatusKey && window.setStatusKey('status.connecting', 'warn');
+      } else if (st === 'disconnected') {
+        window.setStatusKey && window.setStatusKey('status.lost_recovering', 'warn');
+        // give it a short window; restart ICE if it persists
+        clearTimeout(pc.__iceRetryT);
+        pc.__iceRetryT = setTimeout(() => { try { pc.restartIce(); window.addLog && window.addLog('webrtc','restartIce'); } catch {} }, 2500);
+      } else if (st === 'failed') {
+        logSelectedPair('failed');
+        // hard restart once
+        try { pc.restartIce(); window.addLog && window.addLog('webrtc','restartIce (failed)'); } catch {}
+        window.setStatusKey && window.setStatusKey('error.connection', 'err');
+      }
     };
 
     // Monitor overall connection state changes and update UI status accordingly
