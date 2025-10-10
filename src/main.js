@@ -383,8 +383,13 @@ function renderLangSwitch(active) {
           // Если мы callee и оффер уже пришёл — принять автоматически
           if (role === 'callee' && pendingOffer) {
             try {
+              await getMic();
               await acceptIncoming(pendingOffer, async (s) => {
-                if (audioEl) audioEl.srcObject = s;
+                if (audioEl) {
+                  audioEl.muted = false;
+                  audioEl.srcObject = s;
+                  try { await audioEl.play(); } catch {}
+                }
                 bindRemoteStream(s);
                 try { await startAudioViz(s); } catch {}
                 logT('webrtc', 'webrtc.remote_track');
@@ -554,8 +559,13 @@ function renderLangSwitch(active) {
     else logT('warn', 'warn.ws_already_connected_callee');
 
     if (pendingOffer) {
+      await getMic();
       await acceptIncoming(pendingOffer, async (s) => {
-        if (audioEl) audioEl.srcObject = s;
+        if (audioEl) {
+          audioEl.muted = false;
+          audioEl.srcObject = s;
+          try { await audioEl.play(); } catch {}
+        }
         bindRemoteStream(s);
         try { await startAudioViz(s); } catch {}
         logT('webrtc', 'webrtc.remote_track');
