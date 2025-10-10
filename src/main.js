@@ -454,7 +454,11 @@ function renderLangSwitch(active) {
     btnCall && (btnCall.disabled = true);
     await getMic();
     createPC(async (s) => {
-      if (audioEl) audioEl.srcObject = s;
+      if (audioEl) {
+        audioEl.muted = false;
+        audioEl.srcObject = s;
+        try { await audioEl.play(); } catch {}
+      }
       bindRemoteStream(s);
       try { await startAudioViz(s); } catch {}
       logT('webrtc', 'webrtc.remote_track');
