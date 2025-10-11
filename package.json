@@ -1,6 +1,7 @@
 {
     "name": "webrtc-signal",
     "version": "0.1.0",
+    "main": "server.js",
     "type": "module",
     "private": true,
     "scripts": {
