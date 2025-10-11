@@ -394,9 +394,19 @@ function renderLangSwitch(active) {
           break;
         }
         case 'ice': {
-          const c = msg.payload || msg.candidate;
-          if (c) {
-            try { await addRemoteIce(c); }
+          // Accept various envelopes: {candidate}, {payload}, raw string, or end-of-candidates
+          let cand = undefined;
+          if (msg) {
+            if (msg.candidate != null) cand = msg.candidate;
+            else if (msg.payload != null) cand = msg.payload;
+            else if (msg.data != null) cand = msg.data;
+          }
+          // Normalize raw string to RTCIceCandidateInit
+          if (typeof cand === 'string') cand = { candidate: cand };
+          // Ignore explicit end-of-candidates markers
+          if (cand === null || cand === false) break;
+          if (cand && (typeof cand === 'object')) {
+            try { await addRemoteIce(cand); }
             catch (e) { logT('error', 'error.add_remote_ice', { msg: (e?.message || String(e)) }); }
           }
           break;
