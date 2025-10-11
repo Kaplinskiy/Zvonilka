@@ -192,7 +192,11 @@
     // Send ICE candidates to the signaling server as they are gathered
     pc.onicecandidate = (e) => {
       if (e.candidate) {
-        window.wsSend && window.wsSend('ice', e.candidate);
+        try { window.addLog && window.addLog('signal', 'send ice'); } catch {}
+        // Wrap to ensure server forwards as msg.candidate
+        window.wsSend && window.wsSend('ice', { candidate: e.candidate });
+      } else {
+        try { window.addLog && window.addLog('webrtc', 'ice end'); } catch {}
       }
     };
 
