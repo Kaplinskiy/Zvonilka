@@ -403,8 +403,15 @@ function renderLangSwitch(active) {
           }
           // Normalize raw string to RTCIceCandidateInit
           if (typeof cand === 'string') cand = { candidate: cand };
-          // Ignore explicit end-of-candidates markers
-          if (cand === null || cand === false) break;
+          // Signal end-of-candidates to RTCPeerConnection
+          if (cand === null || cand === false) {
+            // Notify PC that there are no more remote candidates
+            try {
+              const pc = (window.getPC && window.getPC()) || (window.__WEBRTC__ && window.__WEBRTC__.getPC && window.__WEBRTC__.getPC());
+              if (pc && pc.addIceCandidate) await pc.addIceCandidate(null);
+            } catch {}
+            break;
+          }
           if (cand && (typeof cand === 'object')) {
             try { await addRemoteIce(cand); }
             catch (e) { logT('error', 'error.add_remote_ice', { msg: (e?.message || String(e)) }); }
