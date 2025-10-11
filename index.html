@@ -256,8 +256,20 @@
     - /public/config.js populates `window.__APP_CONFIG__` with server URLs.
     - The onerror fallback ensures sane defaults if config.js fails to load.
   -->
-  <script src="/config.js"
-          onerror="window.__APP_CONFIG__={SERVER_URL:'https://call.zababba.com/signal',WS_URL:'wss://call.zababba.com/ws'}"></script>
+  <script>
+    (function(){
+      try{
+        var s=document.createElement('script');
+        s.src='/config.js?v='+Date.now();
+        s.onerror=function(){
+          window.__APP_CONFIG__={SERVER_URL:'https://call.zababba.com/signal',WS_URL:'wss://call.zababba.com/ws'};
+        };
+        document.currentScript.parentNode.insertBefore(s, document.currentScript);
+      }catch(e){
+        window.__APP_CONFIG__={SERVER_URL:'https://call.zababba.com/signal',WS_URL:'wss://call.zababba.com/ws'};
+      }
+    })();
+  </script>
 
   <!--
     Logging shim
