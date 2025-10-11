@@ -193,12 +193,13 @@
     pc.onicecandidate = (e) => {
       if (e.candidate) {
         try { window.addLog && window.addLog('signal', 'send ice'); } catch {}
-        // Wrap to ensure server forwards as msg.candidate
-        window.wsSend && window.wsSend('ice', { candidate: e.candidate });
+        // Back-compat: send both shapes so any server path can forward correctly
+        const c = e.candidate;
+        window.wsSend && window.wsSend('ice', { candidate: c, payload: c });
       } else {
         try { window.addLog && window.addLog('webrtc', 'ice end'); } catch {}
-        // Signal end-of-candidates to peer so it can finish ICE on its side
-        try { window.wsSend && window.wsSend('ice', false); } catch {}
+        // Back-compat end marker
+        try { window.wsSend && window.wsSend('ice', { candidate: null }); } catch {}
       }
     };
 
