@@ -98,14 +98,19 @@
         let urls = s.urls;
         if (!urls) return s;
         const list = Array.isArray(urls) ? urls : [urls];
-        s.urls = list.map(u => {
-          if (!t.forceRelay) return u;
-          // ensure tcp transport for relayed paths
-          if (/^turns?:/i.test(u) && !/transport=tcp/i.test(u)) {
-            return u + (u.includes('?') ? '&' : '?') + 'transport=tcp';
+        // Normalize transports when relay is forced: keep only TCP transport
+        const out = new Set();
+        list.forEach((u) => {
+          if (!/^turns?:/i.test(u)) { out.add(u); return; }
+          let v = u;
+          if (t.forceRelay) {
+            // If transport param exists, replace it with tcp, otherwise append tcp
+            if (/[?&]transport=/i.test(v)) v = v.replace(/transport=\w+/i, 'transport=tcp');
+            else v = v + (v.includes('?') ? '&' : '?') + 'transport=tcp';
           }
-          return u;
+          out.add(v);
         });
+        s.urls = Array.from(out);
         return s;
       });
       const cfg = { iceServers: norm };
