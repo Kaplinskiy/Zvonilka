@@ -103,11 +103,9 @@
           if (!/^turns?:/i.test(u)) { out.add(u); return; }
           // base URL without any transport parameter
           const base = u.replace(/([?&])transport=\w+(&|$)/i, '$1').replace(/[?&]$/, '');
-          // add both tcp and udp variants; policy remains 'relay'
+          // TCP only
           const tcp = base + (base.includes('?') ? '&' : '?') + 'transport=tcp';
-          const udp = base + (base.includes('?') ? '&' : '?') + 'transport=udp';
           out.add(tcp);
-          out.add(udp);
         });
         s.urls = Array.from(out);
         return s;
@@ -133,12 +131,9 @@
           const norm = new Set();
           for (let u of list) {
             if (!/^turns?:/i.test(u)) { norm.add(u); continue; }
-            const hasQ = u.includes('?');
-            const withTcp = /transport=tcp/i.test(u) ? u : (u + (hasQ ? '&' : '?') + 'transport=tcp');
+            const base = u.replace(/([?&])transport=\w+(&|$)/i, '$1').replace(/[?&]$/, '');
+            const withTcp = base + (base.includes('?') ? '&' : '?') + 'transport=tcp';
             norm.add(withTcp);
-            const withoutTcp = u.replace(/([?&])transport=tcp(&|$)/i, '$1').replace(/[?&]$/, '');
-            const withUdp = /transport=udp/i.test(withoutTcp) ? withoutTcp : (withoutTcp + (withoutTcp.includes('?') ? '&' : '?') + 'transport=udp');
-            norm.add(withUdp);
           }
           return {
             urls: Array.from(norm),

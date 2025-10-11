@@ -44,18 +44,13 @@ async function loadTurnConfig() {
       .map(s => ({ ...s }))
       .map(s => {
         const list = Array.isArray(s.urls) ? s.urls : (s.urls ? [s.urls] : []);
-        // Базовый список без дубликатов
         const norm = new Set();
         for (let u of list) {
           if (!/^turns?:/i.test(u)) { norm.add(u); continue; }
-          // TCP-вариант
-          const hasQ = u.includes('?');
-          const withTcp = /transport=tcp/i.test(u) ? u : (u + (hasQ ? '&' : '?') + 'transport=tcp');
+          // TCP-only normalization
+          const base = u.replace(/([?&])transport=\w+(&|$)/i, '$1').replace(/[?&]$/, '');
+          const withTcp = base + (base.includes('?') ? '&' : '?') + 'transport=tcp';
           norm.add(withTcp);
-          // UDP-вариант (на случай, если TCP недоступен у провайдера)
-          const withoutTcp = u.replace(/([?&])transport=tcp(&|$)/i, '$1').replace(/[?&]$/, '');
-          const withUdp = /transport=udp/i.test(withoutTcp) ? withoutTcp : (withoutTcp.includes('?') ? withoutTcp + '&' : withoutTcp + '?') + 'transport=udp';
-          norm.add(withUdp);
         }
         return {
           urls: Array.from(norm),
@@ -67,7 +62,7 @@ async function loadTurnConfig() {
 
     // Сохраняем и форсим relay
     window.__TURN__ = { iceServers, forceRelay: true, expiresAt };
-    console.log('TURN config loaded (relay via TCP; UDP fallback kept)', window.__TURN__);
+    console.log('TURN config loaded (TCP-only relay)', window.__TURN__);
 
     // Авто-обновление: за 60 сек до истечения
     if (window.__TURN_REFRESH_T) clearTimeout(window.__TURN_REFRESH_T);
