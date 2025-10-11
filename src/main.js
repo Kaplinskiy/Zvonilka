@@ -355,24 +355,8 @@ function renderLangSwitch(active) {
         }
         case 'joined':
         case 'peer.joined': {
-          // Treat as member.joined for compatibility.
-          try {
-            if (role === 'caller' && !offerAttempted) {
-              if (typeof window.sendOfferIfPossible === 'function') {
-                await window.sendOfferIfPossible(true);
-                offerAttempted = true;
-                logT('webrtc', 'webrtc.offer_sent_caller');
-              } else if (typeof window.createAndSendOffer === 'function') {
-                await window.createAndSendOffer();
-                offerAttempted = true;
-                logT('webrtc', 'webrtc.offer_sent_via_helper');
-              } else {
-                logT('warn', 'warn.no_offer_sender_impl');
-              }
-            }
-          } catch (e) {
-            logT('error', 'error.offer_send_failed', { msg: (e?.message || String(e)) });
-          }
+          // Already handled by member.joined; avoid double offer
+          logT('signal', 'debug.signal_recv_member_joined');
           break;
         }
         case 'offer': {
