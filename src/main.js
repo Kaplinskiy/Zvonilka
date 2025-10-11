@@ -144,6 +144,19 @@ function renderLangSwitch(active) {
     if (on && remoteVideo && __remoteStream) remoteVideo.srcObject = __remoteStream;
   }
 
+  // Wait until TURN creds are loaded to avoid creating PC with empty ICE config
+  async function waitTurnReady(timeoutMs = 6000) {
+    const t0 = Date.now();
+    while (Date.now() - t0 < timeoutMs) {
+      try {
+        const t = window.__TURN__;
+        if (t && Array.isArray(t.iceServers) && t.iceServers.length > 0) return true;
+      } catch {}
+      await new Promise(r => setTimeout(r, 120));
+    }
+    return false;
+  }
+
   // --- AUDIO VISUALIZER (LED bars only) + CALL TIMER ---
   let __audioViz = { ctx: null, analyser: null, srcNode: null, raf: null };
   let __callTimer = { start: null, int: null };
@@ -417,6 +430,7 @@ function renderLangSwitch(active) {
     if (waitWSOpen) await waitWSOpen(3000);
     setStatusKey('status.preparing', 'warn-txt');
     btnCall && (btnCall.disabled = true);
+    await waitTurnReady();
     await getMic();
     createPC(async (s) => {
       if (audioEl) {
@@ -528,6 +542,7 @@ function renderLangSwitch(active) {
     else logT('warn', 'warn.ws_already_connected_callee');
 
     if (pendingOffer) {
+      await waitTurnReady();
       await getMic();
       await acceptIncoming(pendingOffer, async (s) => {
         if (audioEl) {
