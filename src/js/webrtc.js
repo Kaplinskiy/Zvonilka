@@ -115,6 +115,43 @@
     return fallback;
   }
 
+  // Refresh TURN credentials and restart ICE on the fly
+  async function __refreshTurnAndRestart(pc){
+    try {
+      const res = await fetch('/turn-credentials?ts=' + Date.now(), { cache: 'no-store' });
+      if (!res.ok) throw new Error('turn fetch failed');
+      const data = await res.json();
+      const credType = data.credentialType || 'password';
+      const iceServers = (Array.isArray(data.iceServers) ? data.iceServers : [])
+        .map(s => ({ ...s }))
+        .map(s => {
+          const list = Array.isArray(s.urls) ? s.urls : (s.urls ? [s.urls] : []);
+          const norm = new Set();
+          for (let u of list) {
+            if (!/^turns?:/i.test(u)) { norm.add(u); continue; }
+            const hasQ = u.includes('?');
+            const withTcp = /transport=tcp/i.test(u) ? u : (u + (hasQ ? '&' : '?') + 'transport=tcp');
+            norm.add(withTcp);
+            const withoutTcp = u.replace(/([?&])transport=tcp(&|$)/i, '$1').replace(/[?&]$/, '');
+            const withUdp = /transport=udp/i.test(withoutTcp) ? withoutTcp : (withoutTcp + (withoutTcp.includes('?') ? '&' : '?') + 'transport=udp');
+            norm.add(withUdp);
+          }
+          return {
+            urls: Array.from(norm),
+            username: s.username || data.username,
+            credential: s.credential || data.credential,
+            credentialType: s.credentialType || credType
+          };
+        });
+      window.__TURN__ = { iceServers, forceRelay: true };
+      const cfg = getIceConfig();
+      try { pc.setConfiguration(cfg); } catch {}
+      try { pc.restartIce(); window.addLog && window.addLog('webrtc','restartIce after TURN refresh'); } catch {}
+    } catch (e) {
+      window.addLog && window.addLog('error', 'TURN refresh failed: ' + (e.message||e));
+    }
+  }
+
   /**
    * Creates and initializes a new RTCPeerConnection with appropriate event handlers.
    * Attaches local media tracks if available.
@@ -134,6 +171,10 @@
     // Extra diagnostics
     pc.onicecandidateerror = (e) => {
       try { window.addLog && window.addLog('webrtc', `icecandidateerror code=${e.errorCode} text=${e.errorText||''} url=${e.url||''}`); } catch {}
+      if ((e.errorCode === 401 || e.errorCode === 403) && !pc.__turnRefreshed) {
+        pc.__turnRefreshed = true;
+        __refreshTurnAndRestart(pc);
+      }
     };
     async function logSelectedPair(label){
       try {

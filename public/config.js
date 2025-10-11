@@ -7,36 +7,59 @@ window.__APP_CONFIG__ = {
   WS_URL:     `${location.origin.replace(/^http/, 'ws')}/ws`
 };
 
-// Загружаем динамические TURN креды с бэкенда (принудительно TCP/443)
+// Загружаем динамические TURN креды с бэкенда (принудительно добавляем TCP и оставляем UDP как фолбэк)
 async function loadTurnConfig() {
   try {
-    const res = await fetch('/turn-credentials');
+    // no-cache to avoid stale creds
+    const res = await fetch('/turn-credentials?ts=' + Date.now(), { cache: 'no-store' });
     if (!res.ok) throw new Error('TURN not available');
     const data = await res.json();
 
-    // Нормализуем iceServers: превращаем urls в массив и добавляем transport=tcp для TURN(S)
+    const credType = data.credentialType || 'password';
+    const ttlSec = Number(data.ttl || 0);
+    const expiresAt = data.expires ? Date.parse(data.expires) : (ttlSec > 0 ? Date.now() + ttlSec * 1000 : 0);
+
+    // Нормализуем iceServers: превращаем urls в массив и добавляем transport=tcp для TURN(S),
+    // а также гарантируем наличие UDP-вариантов как запасного плана.
     const iceServers = (Array.isArray(data.iceServers) ? data.iceServers : [])
       .map(s => ({ ...s }))
       .map(s => {
         const list = Array.isArray(s.urls) ? s.urls : (s.urls ? [s.urls] : []);
-        s.urls = list.map(u => {
-          if (/^turns?:/i.test(u) && !/transport=tcp/i.test(u)) {
-            return u + (u.includes('?') ? '&' : '?') + 'transport=tcp';
-          }
-          return u;
-        });
-        return s;
+        // Базовый список без дубликатов
+        const norm = new Set();
+        for (let u of list) {
+          if (!/^turns?:/i.test(u)) { norm.add(u); continue; }
+          // TCP-вариант
+          const hasQ = u.includes('?');
+          const withTcp = /transport=tcp/i.test(u) ? u : (u + (hasQ ? '&' : '?') + 'transport=tcp');
+          norm.add(withTcp);
+          // UDP-вариант (на случай, если TCP недоступен у провайдера)
+          const withoutTcp = u.replace(/([?&])transport=tcp(&|$)/i, '$1').replace(/[?&]$/, '');
+          const withUdp = /transport=udp/i.test(withoutTcp) ? withoutTcp : (withoutTcp.includes('?') ? withoutTcp + '&' : withoutTcp + '?') + 'transport=udp';
+          norm.add(withUdp);
+        }
+        return {
+          urls: Array.from(norm),
+          username: s.username || data.username,
+          credential: s.credential || data.credential,
+          credentialType: s.credentialType || credType
+        };
       });
 
-    window.__TURN__ = {
-      iceServers,
-      forceRelay: true // всегда через relay для устойчивости на мобиле/за NAT
-    };
-    console.log('TURN config loaded (relay via TCP)', window.__TURN__);
+    // Сохраняем и форсим relay
+    window.__TURN__ = { iceServers, forceRelay: true, expiresAt };
+    console.log('TURN config loaded (relay via TCP; UDP fallback kept)', window.__TURN__);
+
+    // Авто-обновление: за 60 сек до истечения
+    if (window.__TURN_REFRESH_T) clearTimeout(window.__TURN_REFRESH_T);
+    if (expiresAt && expiresAt > Date.now()) {
+      const refreshMs = Math.max(5_000, (expiresAt - Date.now()) - 60_000);
+      window.__TURN_REFRESH_T = setTimeout(loadTurnConfig, refreshMs);
+    }
   } catch (e) {
-    console.warn('TURN disabled, fallback to STUN/direct');
-    // fallback на прямое соединение; без TURN relay невозможен
-    window.__TURN__ = { iceServers: [], forceRelay: false };
+    console.warn('TURN disabled or fetch failed, fallback to direct/STUN only');
+    window.__TURN__ = { iceServers: [], forceRelay: false, expiresAt: 0 };
+    if (window.__TURN_REFRESH_T) clearTimeout(window.__TURN_REFRESH_T);
   }
 }
 loadTurnConfig();
