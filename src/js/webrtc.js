@@ -98,17 +98,16 @@
         let urls = s.urls;
         if (!urls) return s;
         const list = Array.isArray(urls) ? urls : [urls];
-        // Normalize transports when relay is forced: keep only TCP transport
         const out = new Set();
         list.forEach((u) => {
           if (!/^turns?:/i.test(u)) { out.add(u); return; }
-          let v = u;
-          if (t.forceRelay) {
-            // If transport param exists, replace it with tcp, otherwise append tcp
-            if (/[?&]transport=/i.test(v)) v = v.replace(/transport=\w+/i, 'transport=tcp');
-            else v = v + (v.includes('?') ? '&' : '?') + 'transport=tcp';
-          }
-          out.add(v);
+          // base URL without any transport parameter
+          const base = u.replace(/([?&])transport=\w+(&|$)/i, '$1').replace(/[?&]$/, '');
+          // add both tcp and udp variants; policy remains 'relay'
+          const tcp = base + (base.includes('?') ? '&' : '?') + 'transport=tcp';
+          const udp = base + (base.includes('?') ? '&' : '?') + 'transport=udp';
+          out.add(tcp);
+          out.add(udp);
         });
         s.urls = Array.from(out);
         return s;
