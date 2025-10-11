@@ -74,6 +74,24 @@ jobs:
             "${BUILD_DIR}/" \
             "${SSH_USER}@${SSH_HOST}:${DEPLOY_PATH}/"
 
+      - name: Upload server files (server.js, package.json, lock, ecosystem)
+        if: env.SSH_HOST != '' && env.DEPLOY_PATH != ''
+        run: |
+          rsync -az -e "ssh -p ${SSH_PORT:-22}" \
+            server.js package.json package-lock.json ecosystem.config.js \
+            "${SSH_USER}@${SSH_HOST}:${DEPLOY_PATH}/" || true
+
+      - name: Install server runtime deps on host (npm ci --omit=dev)
+        if: env.SSH_HOST != '' && env.DEPLOY_PATH != ''
+        run: |
+          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "\
+            set -e; \
+            cd '${DEPLOY_PATH}' || exit 0; \
+            if [ -f package.json ]; then \
+              npm ci --omit=dev; \
+            fi
+          "
+
       # (Опционально) Перекатить статику атомарно через симлинк, если используется версияция релизов
       # Раскомментируй и адаптируй при необходимости
       # - name: Atomic switch (optional)
@@ -95,6 +113,21 @@ jobs:
         if: env.SERVICE_NAME != '' && env.SSH_HOST != ''
         run: |
           ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "sudo systemctl daemon-reload || true && sudo systemctl restart '${SERVICE_NAME}' && sudo systemctl status '${SERVICE_NAME}' --no-pager -l || true"
+
+      - name: Restart PM2 process (fallback if no systemd)
+        if: env.SSH_HOST != ''
+        run: |
+          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "\
+            set -e; \
+            cd '${DEPLOY_PATH}'; \
+            if [ -f ecosystem.config.js ]; then \
+              pm2 start ecosystem.config.js --only call-signal || pm2 start ecosystem.config.js; \
+            else \
+              pm2 restart call-signal || pm2 start server.js --name call-signal; \
+            fi; \
+            pm2 save || true; \
+            pm2 status call-signal || true
+          "
 
       # Небольшая проверка, что index.html на месте
       - name: Verify remote files
