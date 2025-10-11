@@ -293,6 +293,29 @@
   <script type="module" src="/src/main.js"></script>
 
   <!--
+    One-click Service Worker and cache reset via ?reset=1
+    - If URL has ?reset=1, clear SW + caches + storages, then continue loading fresh assets
+  -->
+  <script>
+    // If URL has ?reset=1, clear SW + caches + storages, then continue loading fresh assets
+    (function(){
+      try {
+        const qs = new URLSearchParams(location.search);
+        if (qs.get('reset') === '1') {
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()));
+          }
+          if (window.caches && caches.keys) {
+            caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+          }
+          try { localStorage.clear(); sessionStorage.clear(); } catch {}
+          console.log('RESET: SW and caches cleared');
+        }
+      } catch {}
+    })();
+  </script>
+
+  <!--
     Service Worker registration
     - Registers /sw.js on window load.
     - Logs registration result to the in-app logger if available.
