@@ -197,6 +197,8 @@
         window.wsSend && window.wsSend('ice', { candidate: e.candidate });
       } else {
         try { window.addLog && window.addLog('webrtc', 'ice end'); } catch {}
+        // Signal end-of-candidates to peer so it can finish ICE on its side
+        try { window.wsSend && window.wsSend('ice', false); } catch {}
       }
     };
 
