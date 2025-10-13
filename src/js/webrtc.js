@@ -39,13 +39,24 @@
   /**
    * Adds a remote ICE candidate to the peer connection.
    * If the remote description has not yet been applied, the candidate is queued.
-   * @param {RTCIceCandidateInit} c - ICE candidate object.
+   * Accepts raw string or object, and infers sdpMid for single-m-line SDP.
+   * @param {RTCIceCandidateInit|string} c - ICE candidate object or string.
    */
   async function addRemoteIce(c){
     if (!pc) return;
-    // если remoteDescription ещё нет — очередь
+    // Queue until remote description is set
     if (!pc.remoteDescription) { window.__REMOTE_ICE_Q.push(c); return; }
-    try { await pc.addIceCandidate(c); } catch {}
+    // Normalize candidate shape: allow raw string and missing mid/index
+    let init = c;
+    if (typeof init === 'string') init = { candidate: init };
+    if (init && typeof init === 'object' && init.candidate && !('sdpMid' in init) && !('sdpMLineIndex' in init)) {
+      try {
+        const tx = pc.getTransceivers && pc.getTransceivers()[0];
+        const mid = (tx && tx.mid) || (pc.currentRemoteDescription && pc.currentRemoteDescription.sdp && '0') || '0';
+        init = { ...init, sdpMid: mid };
+      } catch {}
+    }
+    try { await pc.addIceCandidate(init); } catch {}
   }
   
   async function applyAnswer(ans){
