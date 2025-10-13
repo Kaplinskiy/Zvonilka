@@ -378,6 +378,7 @@ function renderLangSwitch(active) {
           // Normalize {type:'offer', sdp} or legacy {payload|offer}
           const _sdp = msg?.sdp || msg?.payload?.sdp || null;
           pendingOffer = _sdp ? { type: 'offer', sdp: _sdp } : (msg.payload || msg.offer || null);
+          window.__LAST_OFFER = pendingOffer; // debug: allow manual accept from console
           // Always show the Answer button; do NOT auto-accept to avoid races
           if (btnAnswer) btnAnswer.classList.remove('hidden');
           if (pendingOffer) {
