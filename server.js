@@ -155,6 +155,10 @@ wss.on('connection', (ws) => {
         return;
       }
 
+      if (msg?.type) {
+        console.log(`[SIGNAL IN] ${roomId}`, msg.type, msg.candidate ? 'ICE' : '', msg.sdp ? 'SDP' : '');
+      }
+
       // Handle ping messages by responding with a ping to keep the connection alive.
       if (msg?.type === 'ping') {
         try { ws.send(JSON.stringify({ type: 'ping' })); } catch {}
@@ -186,15 +190,21 @@ wss.on('connection', (ws) => {
           }
         }
       }
+
+      if (msg?.type) {
+        console.log(`[SIGNAL OUT] ${roomId}`, msg.type);
+      }
       broadcast(roomId, msg, ws);
     });
 
     ws.on('close', () => {
+      console.log(`[WS CLOSE] ${roomId}`);
       // Notify remaining clients in the room that a peer has left.
       broadcast(roomId, { type: 'bye', reason: 'peer-left' }, ws);
       removeFromRoom(ws);
     });
     ws.on('error', () => {
+      console.error(`[WS ERROR] ${roomId}`);
       // Suppress errors; can be enhanced with debug logging if needed.
     });
   } catch {
