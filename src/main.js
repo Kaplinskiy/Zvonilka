@@ -393,9 +393,17 @@ function renderLangSwitch(active) {
           // Support {type:'answer', sdp} or legacy {payload|answer}
           const _sdpAns = msg?.sdp || msg?.payload?.sdp || null;
           const ans = _sdpAns ? { type: 'answer', sdp: _sdpAns } : (msg.payload || msg.answer);
+          // --- Debugging for incoming answers ---
+          window.__LAST_ANSWER_RAW = msg;    // debug
+          window.__LAST_ANSWER = ans;        // debug
+          try { console.debug('[ANSWER-IN]', ans); } catch {}
+          // -------------------------------------
           if (ans) {
             try { await applyAnswer(ans); }
-            catch (e) { logT('error', 'error.apply_answer', { msg: (e?.message || String(e)) }); }
+            catch (e) {
+              try { console.error('[applyAnswer error]', e, ans); } catch {}
+              logT('error', 'error.apply_answer', { msg: (e?.message || String(e)) });
+            }
           }
           break;
         }
