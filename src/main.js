@@ -397,6 +397,8 @@ function renderLangSwitch(active) {
           window.__LAST_ANSWER_RAW = msg;    // debug
           window.__LAST_ANSWER = ans;        // debug
           try { console.debug('[ANSWER-IN]', ans); } catch {}
+          // Apply answer only on the caller; callee already set its local answer
+          if (role !== 'caller') { break; }
           // -------------------------------------
           if (ans) {
             try { await applyAnswer(ans); }
