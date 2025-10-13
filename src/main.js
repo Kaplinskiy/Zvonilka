@@ -401,11 +401,28 @@ function renderLangSwitch(active) {
           if (role !== 'caller') { break; }
           // -------------------------------------
           if (ans) {
-            try { await applyAnswer(ans); }
-            catch (e) {
-              try { console.error('[applyAnswer error]', e, ans); } catch {}
-              logT('error', 'error.apply_answer', { msg: (e?.message || String(e)) });
-            }
+            const pc = (window.getPC && window.getPC()) || (window.__WEBRTC__ && window.__WEBRTC__.getPC && window.__WEBRTC__.getPC());
+            let attempts = 0;
+            const tryApply = async () => {
+              attempts++;
+              try {
+                const st = pc && pc.signalingState;
+                // Prefer to apply when local offer is set
+                if (!pc || (st && st.startsWith('have-local-')) || attempts > 10) {
+                  await applyAnswer(ans);
+                  return true;
+                }
+              } catch (e) {
+                if (attempts > 10) {
+                  try { console.error('[applyAnswer error]', e, ans); } catch {}
+                  logT('error', 'error.apply_answer', { msg: (e?.message || String(e)) });
+                  return true;
+                }
+              }
+              setTimeout(tryApply, 300);
+              return false;
+            };
+            await tryApply();
           }
           break;
         }
