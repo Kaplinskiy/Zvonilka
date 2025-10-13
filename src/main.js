@@ -334,6 +334,7 @@ function renderLangSwitch(active) {
    */
   async function onSignal(msg) {
     try {
+      try { window.__SIG_HOOK && window.__SIG_HOOK(msg); } catch {}
       if (!msg || typeof msg !== 'object') return;
       switch (msg.type) {
         case 'hello': {
