@@ -61,10 +61,21 @@
   
   async function applyAnswer(ans){
     if (!pc) throw new Error('pc is not initialized');
-    // поддерживаем оба формата: объект {type,sdp} и сырой SDP/объект с sdp
-    const desc = (ans && ans.type) ? ans : { type: 'answer', sdp: (ans && ans.sdp) ? ans.sdp : ans };
+    // Extract SDP string from various shapes: string | {sdp} | {payload:{sdp}} | {answer:{sdp}} | {sdp:{sdp}}
+    function extractSdp(x){
+      if (!x) return null;
+      if (typeof x === 'string') return x;
+      if (typeof x.sdp === 'string') return x.sdp;
+      if (x.sdp && typeof x.sdp === 'object' && typeof x.sdp.sdp === 'string') return x.sdp.sdp;
+      if (x.payload) return extractSdp(x.payload);
+      if (x.answer) return extractSdp(x.answer);
+      return null;
+    }
+    const sdpStr = extractSdp(ans);
+    const desc = sdpStr ? { type: 'answer', sdp: sdpStr }
+                        : ((ans && ans.type) ? ans : { type: 'answer', sdp: String(ans || '') });
     await pc.setRemoteDescription(new RTCSessionDescription(desc));
-    // вылить отложенные ICE
+    // Flush queued ICE
     try {
       if (Array.isArray(window.__REMOTE_ICE_Q) && window.__REMOTE_ICE_Q.length) {
         for (const c of window.__REMOTE_ICE_Q.splice(0)) {
