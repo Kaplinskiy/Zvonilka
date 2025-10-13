@@ -511,7 +511,19 @@ function renderLangSwitch(active) {
    * @param {string} reason - Reason for cleanup, for logging.
    */
   function doCleanup(reason = 'user-hangup') {
-    try { wsSend('bye', { reason }); } catch {}
+    // Guard: ignore premature peer-bye while PC not established
+    try {
+      const pc = (window.getPC && window.getPC()) || (window.__WEBRTC__ && window.__WEBRTC__.getPC && window.__WEBRTC__.getPC());
+      const ice = pc && pc.iceConnectionState;
+      const conn = pc && pc.connectionState;
+      const sig = pc && pc.signalingState;
+      if (reason === 'peer-bye' && pc && (conn === 'new' || sig === 'new' || sig === 'have-local-offer')) {
+        // ignore spurious bye during setup; do not teardown UI
+        return;
+      }
+    } catch {}
+    // Do not echo bye if we are handling a peer-bye
+    if (reason !== 'peer-bye') { try { wsSend('bye', { reason }); } catch {} }
     try { wsClose(); } catch {}
     try { cleanupRTC(reason); } catch {}
     clearInterval(pingTimer);

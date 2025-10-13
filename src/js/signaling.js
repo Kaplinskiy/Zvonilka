@@ -127,6 +127,7 @@ function connectWS(role, roomId, onMessage) {
       _ws.onmessage = (ev) => {
         let msg;
         try { msg = JSON.parse(ev.data); } catch { msg = ev.data; }
+        try { window.__SIG_HOOK && window.__SIG_HOOK(msg); } catch {}
 
         // Ignore ping messages from server
         if (typeof msg === 'object' && msg && msg.type === 'ping') {
