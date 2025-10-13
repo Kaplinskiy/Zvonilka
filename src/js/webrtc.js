@@ -300,6 +300,11 @@
         window.addLog && window.addLog('warn', 'acceptIncoming: no offer');
         return;
       }
+      // Normalize offer shape: support {sdp}, {payload:{sdp}}, legacy strings
+      const _sdp = (typeof pendingOffer === 'string')
+        ? pendingOffer
+        : (pendingOffer?.sdp || pendingOffer?.payload?.sdp || pendingOffer?.offer?.sdp || null);
+      if (_sdp) pendingOffer = { type: 'offer', sdp: _sdp };
       if (!pc) createPC(onTrackCb);
       await pc.setRemoteDescription(new RTCSessionDescription(pendingOffer));
       const answer = await pc.createAnswer();
