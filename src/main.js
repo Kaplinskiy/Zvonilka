@@ -397,29 +397,35 @@ function renderLangSwitch(active) {
           break;
         }
         case 'ice': {
-          // Accept various envelopes: {candidate}, {payload}, raw string, or end-of-candidates
+          // Normalize various envelopes: {candidate}, {payload:{candidate}}, raw string, or end-of-candidates
           let cand = undefined;
           if (msg) {
-            if (msg.candidate != null) cand = msg.candidate;
-            else if (msg.payload != null) cand = msg.payload;
-            else if (msg.data != null) cand = msg.data;
+            cand = (
+              (msg.candidate !== undefined ? msg.candidate : undefined) ??
+              (msg.payload && (msg.payload.candidate !== undefined ? msg.payload.candidate : msg.payload)) ??
+              (msg.data !== undefined ? msg.data : undefined) ??
+              null
+            );
           }
-          // Unwrap envelopes like {candidate:{...}} that some paths may forward
-          if (cand && typeof cand === 'object' && cand.candidate && !cand.sdpMid && !cand.sdpMLineIndex) {
-            cand = cand.candidate;
-          }
-          // Normalize raw string to RTCIceCandidateInit
-          if (typeof cand === 'string') cand = { candidate: cand };
-          // Signal end-of-candidates to RTCPeerConnection
+
+          // End-of-candidates marker
           if (cand === null || cand === false) {
-            // Notify PC that there are no more remote candidates
             try {
               const pc = (window.getPC && window.getPC()) || (window.__WEBRTC__ && window.__WEBRTC__.getPC && window.__WEBRTC__.getPC());
               if (pc && pc.addIceCandidate) await pc.addIceCandidate(null);
             } catch {}
             break;
           }
-          if (cand && (typeof cand === 'object')) {
+
+          // String -> RTCIceCandidateInit
+          if (typeof cand === 'string') cand = { candidate: cand };
+
+          // Unwrap {candidate:{...}} to inner object
+          if (cand && typeof cand === 'object' && cand.candidate && !cand.sdpMid && !cand.sdpMLineIndex) {
+            cand = cand.candidate;
+          }
+
+          if (cand && typeof cand === 'object') {
             try { await addRemoteIce(cand); }
             catch (e) { logT('error', 'error.add_remote_ice', { msg: (e?.message || String(e)) }); }
           }
