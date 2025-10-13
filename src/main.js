@@ -418,6 +418,11 @@ function renderLangSwitch(active) {
                       try { await addRemoteIce({ candidate: m.candidate }); } catch {}
                     }
                   } catch {}
+                  // Nudge ICE to pick up TCP-only candidates
+                  try {
+                    const pc2 = (window.getPC && window.getPC()) || (window.__WEBRTC__ && window.__WEBRTC__.getPC && window.__WEBRTC__.getPC());
+                    pc2 && pc2.restartIce && pc2.restartIce();
+                  } catch {}
                   return true;
                 }
               } catch (e) {
@@ -462,6 +467,15 @@ function renderLangSwitch(active) {
           if (cand && typeof cand === 'object' && cand.candidate && !cand.sdpMid && !cand.sdpMLineIndex) {
             cand = cand.candidate;
           }
+
+          // TCP-only mode: ignore UDP candidates to match server config
+          try {
+            const line = (typeof cand === 'string') ? cand : cand && cand.candidate;
+            if (line && /\bcandidate:.*\budp\b/i.test(line)) {
+              try { console.debug('[ICE DROP] UDP candidate ignored'); } catch {}
+              break;
+            }
+          } catch {}
 
           if (cand && typeof cand === 'object') {
             try { await addRemoteIce(cand); }
