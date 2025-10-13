@@ -300,11 +300,18 @@
         window.addLog && window.addLog('warn', 'acceptIncoming: no offer');
         return;
       }
-      // Normalize offer shape: support {sdp}, {payload:{sdp}}, legacy strings
-      const _sdp = (typeof pendingOffer === 'string')
-        ? pendingOffer
-        : (pendingOffer?.sdp || pendingOffer?.payload?.sdp || pendingOffer?.offer?.sdp || null);
-      if (_sdp) pendingOffer = { type: 'offer', sdp: _sdp };
+      // Normalize offer: accept raw string or nested objects
+      function extractSdp(x){
+        if (!x) return null;
+        if (typeof x === 'string') return x;
+        if (typeof x.sdp === 'string') return x.sdp;
+        if (x.sdp && typeof x.sdp === 'object' && typeof x.sdp.sdp === 'string') return x.sdp.sdp;
+        if (x.payload) return extractSdp(x.payload);
+        if (x.offer) return extractSdp(x.offer);
+        return null;
+      }
+      const sdpStr = extractSdp(pendingOffer);
+      if (sdpStr) pendingOffer = { type: 'offer', sdp: sdpStr };
       if (!pc) createPC(onTrackCb);
       await pc.setRemoteDescription(new RTCSessionDescription(pendingOffer));
       const answer = await pc.createAnswer();
