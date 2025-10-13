@@ -401,6 +401,10 @@ function renderLangSwitch(active) {
             else if (msg.payload != null) cand = msg.payload;
             else if (msg.data != null) cand = msg.data;
           }
+          // Unwrap envelopes like {candidate:{...}} that some paths may forward
+          if (cand && typeof cand === 'object' && cand.candidate && !cand.sdpMid && !cand.sdpMLineIndex) {
+            cand = cand.candidate;
+          }
           // Normalize raw string to RTCIceCandidateInit
           if (typeof cand === 'string') cand = { candidate: cand };
           // Signal end-of-candidates to RTCPeerConnection
