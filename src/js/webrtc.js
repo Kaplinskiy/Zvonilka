@@ -125,13 +125,9 @@
           if (!/^turns?:/i.test(u)) { out.add(u); return; }
           // base URL without any transport parameter
           const base = u.replace(/([?&])transport=\w+(&|$)/i, '$1').replace(/[?&]$/, '');
-          // Mobile: TCP-only; Desktop: TCP + UDP
+          // TCP-only for all clients
           const tcp = base + (base.includes('?') ? '&' : '?') + 'transport=tcp';
           out.add(tcp);
-          if (!isMobile) {
-            const udp = base + (base.includes('?') ? '&' : '?') + 'transport=udp';
-            out.add(udp);
-          }
         });
         s.urls = Array.from(out);
         return s;
