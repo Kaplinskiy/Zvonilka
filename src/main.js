@@ -613,10 +613,11 @@ function renderLangSwitch(active) {
     if (!isWSOpen()) await connectWS('callee', roomId, onSignal);
     else logT('warn', 'warn.ws_already_connected_callee');
 
-    if (pendingOffer) {
+    const offerToUse = pendingOffer || window.__LAST_OFFER || null;
+    if (offerToUse) {
       await waitTurnReady();
       await getMic();
-      await acceptIncoming(pendingOffer, async (s) => {
+      await acceptIncoming(offerToUse, async (s) => {
         if (audioEl) {
           audioEl.muted = false;
           audioEl.srcObject = s;
