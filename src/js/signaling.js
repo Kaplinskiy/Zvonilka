@@ -204,10 +204,30 @@ function connectWS(role, roomId, onMessage) {
    */
   function wsSend(type, payload) {
     try {
-      if (_ws && _ws.readyState === WebSocket.OPEN) {
-        _ws.send(JSON.stringify({ type, ...(payload ? { payload } : {}) }));
-        window.addLog && window.addLog('signal', `send ${type}`);
+      if (!(_ws && _ws.readyState === WebSocket.OPEN)) return;
+
+      let out;
+      if (type === 'ice') {
+        // Canonical ICE: {type:'ice', candidate:<RTCIceCandidateInit|null>}
+        const cand = (payload && typeof payload === 'object' && 'candidate' in payload)
+          ? payload.candidate
+          : (payload ?? null);
+        out = { type: 'ice', candidate: cand };
+      } else if (type === 'offer') {
+        // Canonical offer: {type:'offer', sdp:<string>}
+        const sdp = (payload && (payload.sdp || payload?.payload?.sdp)) || payload;
+        out = { type: 'offer', sdp: typeof sdp === 'string' ? sdp : (sdp?.sdp || '') };
+      } else if (type === 'answer') {
+        // Canonical answer: {type:'answer', sdp:<string>}
+        const sdp = (payload && (payload.sdp || payload?.payload?.sdp)) || payload;
+        out = { type: 'answer', sdp: typeof sdp === 'string' ? sdp : (sdp?.sdp || '') };
+      } else {
+        // Generic: keep legacy payload wrapper for other message types
+        out = payload ? { type, payload } : { type };
       }
+
+      _ws.send(JSON.stringify(out));
+      try { window.addLog && window.addLog('signal', `send ${type}`); } catch {}
     } catch (e) {
       window.addLog && window.addLog('error', e.message || String(e));
     }
