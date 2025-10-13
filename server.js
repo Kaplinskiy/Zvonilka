@@ -167,7 +167,25 @@ wss.on('connection', (ws) => {
         return;
       }
 
-      // Relay all other messages transparently to other clients in the same room.
+      // Normalize signaling message formats before relaying
+      if (msg && typeof msg === 'object') {
+        if (msg.type === 'offer' && msg.payload && !msg.sdp) {
+          msg = { type: 'offer', sdp: msg.payload };
+        } else if (msg.type === 'answer' && msg.payload && !msg.sdp) {
+          msg = { type: 'answer', sdp: msg.payload };
+        } else if (msg.type === 'ice') {
+          // unify ice format: { type:'ice', candidate:<object|null> }
+          if (msg.payload && typeof msg.payload === 'object' && msg.payload.candidate) {
+            msg = { type: 'ice', candidate: msg.payload.candidate };
+          } else if (msg.payload && typeof msg.payload === 'object' && ('candidate' in msg.payload)) {
+            msg = { type: 'ice', candidate: msg.payload.candidate };
+          } else if ('payload' in msg && msg.payload === null) {
+            msg = { type: 'ice', candidate: null };
+          } else if ('candidate' in msg) {
+            msg = { type: 'ice', candidate: msg.candidate };
+          }
+        }
+      }
       broadcast(roomId, msg, ws);
     });
 
