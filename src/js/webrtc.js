@@ -193,7 +193,8 @@
     pc.onicecandidate = (e) => {
       if (e.candidate) {
         try { window.addLog && window.addLog('signal', 'send ice'); } catch {}
-        window.wsSend && window.wsSend('ice', e.candidate); // raw RTCIceCandidateInit
+        const init = e.candidate && e.candidate.toJSON ? e.candidate.toJSON() : e.candidate;
+        window.wsSend && window.wsSend('ice', init);
       } else {
         try { window.addLog && window.addLog('webrtc', 'ice end'); } catch {}
         window.wsSend && window.wsSend('ice', null); // end-of-candidates
