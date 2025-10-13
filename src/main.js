@@ -389,7 +389,9 @@ function renderLangSwitch(active) {
         }
         case 'answer': {
           logT('signal', 'debug.signal_recv_answer');
-          const ans = msg.payload || msg.answer;
+          // Support {type:'answer', sdp} or legacy {payload|answer}
+          const _sdpAns = msg?.sdp || msg?.payload?.sdp || null;
+          const ans = _sdpAns ? { type: 'answer', sdp: _sdpAns } : (msg.payload || msg.answer);
           if (ans) {
             try { await applyAnswer(ans); }
             catch (e) { logT('error', 'error.apply_answer', { msg: (e?.message || String(e)) }); }
