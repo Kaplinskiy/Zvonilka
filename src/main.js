@@ -410,6 +410,14 @@ function renderLangSwitch(active) {
                 // Prefer to apply when local offer is set
                 if (!pc || (st && st.startsWith('have-local-')) || attempts > 10) {
                   await applyAnswer(ans);
+                  // Flush any last ICE candidates captured by WS hook
+                  try {
+                    const pc2 = (window.getPC && window.getPC()) || (window.__WEBRTC__ && window.__WEBRTC__.getPC && window.__WEBRTC__.getPC());
+                    const recent = (window.__SIGLOG || []).filter(m => m && m.type === 'ice' && typeof m.candidate === 'string').slice(-8);
+                    for (const m of recent) {
+                      try { await addRemoteIce({ candidate: m.candidate }); } catch {}
+                    }
+                  } catch {}
                   return true;
                 }
               } catch (e) {
