@@ -471,6 +471,7 @@ function renderLangSwitch(active) {
         }
         case 'bye': {
           logT('signal', 'debug.signal_recv_bye');
+          try { console.debug('[BYE-IN]'); } catch {}
           doCleanup('peer-bye');
           break;
         }
@@ -525,7 +526,7 @@ function renderLangSwitch(active) {
       const ice = pc && pc.iceConnectionState;
       const conn = pc && pc.connectionState;
       const sig = pc && pc.signalingState;
-      if (reason === 'peer-bye' && pc && (conn === 'new' || sig === 'new' || sig === 'have-local-offer')) {
+      if (reason === 'peer-bye' && pc && (ice === 'new' || conn === 'new' || sig === 'new' || sig === 'have-local-offer')) {
         // ignore spurious bye during setup; do not teardown UI
         return;
       }
