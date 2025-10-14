@@ -50,10 +50,16 @@ async function loadTurnConfig() {
           // add both TCP and UDP variants with correct schemes
           // TCP over TLS must use `turns:`; UDP must use plain `turn:`
           const base = u.replace(/([?&])transport=\w+(&|$)/i, '$1').replace(/[?&]$/, '');
+          // TCP over TLS on 443
           const baseTcp = base.replace(/^turn:/i, 'turns:');
-          const baseUdp = base.replace(/^turns:/i, 'turn:');
           const withTcp = baseTcp + (baseTcp.includes('?') ? '&' : '?') + 'transport=tcp';
+
+          // UDP on 3478 (coturn listening-port). Force scheme turn: and port 3478.
+          let host = base.replace(/^turns?:\/\//i, '');
+          host = host.replace(/:(\d+)/, ''); // strip any explicit port
+          const baseUdp = 'turn://' + host + ':3478';
           const withUdp = baseUdp + (baseUdp.includes('?') ? '&' : '?') + 'transport=udp';
+
           norm.add(withTcp);
           norm.add(withUdp);
         }
