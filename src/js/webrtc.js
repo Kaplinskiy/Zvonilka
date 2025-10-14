@@ -121,25 +121,21 @@
         if (!urls) return s;
         const list = Array.isArray(urls) ? urls : [urls];
         const out = new Set();
-        list.forEach((u) => {
-          if (!/^turns?:/i.test(u)) { out.add(u); return; }
-          // Extract original transport if present
-          const wanted = /transport=tcp/i.test(u) ? 'tcp' : (/transport=udp/i.test(u) ? 'udp' : null);
-          // Strip any leading scheme: "turn:", "turns:", "turn://", "turns://"
-          let rest = (u || '').trim();
-          rest = rest.replace(/^turns?:\/{0,2}/i, '');
-          rest = rest.replace(/^turns?:\/{0,2}/i, '');
-          rest = rest.replace(/([?&])transport=\w+(&|$)/i, '$1').replace(/[?&]$/, '');
-          // Choose scheme by transport: TCP over TLS → turns://, UDP → turn://
-          const scheme = (wanted === 'tcp') ? 'turns://' : 'turn://';
-          const base = scheme + rest;
-          const final = wanted ? (base + (base.includes('?') ? '&' : '?') + 'transport=' + wanted) : base;
-          out.add(final);
-        });
-        s.urls = Array.from(out);
-        // Validate and drop malformed TURN URLs (e.g., duplicated schemes)
         const valid = /^turns?:\/\/[^\s/?#:]+(?::\d+)?(?:\?.*)?$/i;
-        s.urls = s.urls.filter(u => valid.test(u));
+        list.forEach((u) => {
+          if (!u) return;
+          if (valid.test(u)) { out.add(u); return; }
+          // Fallback rebuild from hostname only when malformed
+          if (!/^turns?:/i.test(u)) { out.add(u); return; }
+          const raw = String(u).trim();
+          const hostOnly = raw.replace(/^turns?:\/{0,2}/i, '').replace(/^turns?:\/{0,2}/i, '').split('?')[0].split(':')[0];
+          const wanted = /transport=tcp/i.test(raw) ? 'tcp' : (/transport=udp/i.test(raw) ? 'udp' : null);
+          const rebuilt = (wanted === 'tcp')
+            ? `turns://${hostOnly}:443?transport=tcp`
+            : `turn://${hostOnly}:3478?transport=udp`;
+          out.add(rebuilt);
+        });
+        s.urls = Array.from(out).filter(u => valid.test(u));
         return s;
       });
       const cfg = { iceServers: norm };
@@ -165,21 +161,19 @@
         .map(s => {
           const list = Array.isArray(s.urls) ? s.urls : (s.urls ? [s.urls] : []);
           const norm = new Set();
-          for (let u of list) {
-            if (!/^turns?:/i.test(u)) { norm.add(u); continue; }
-            const wanted = /transport=tcp/i.test(u) ? 'tcp' : (/transport=udp/i.test(u) ? 'udp' : null);
-            // Strip any leading scheme: "turn:", "turns:", with or without slashes
-            let rest = (u || '').trim();
-            rest = rest.replace(/^turns?:\/{0,2}/i, '');
-            rest = rest.replace(/^turns?:\/{0,2}/i, '');
-            rest = rest.replace(/([?&])transport=\w+(&|$)/i, '$1').replace(/[?&]$/, '');
-            const scheme = (wanted === 'tcp') ? 'turns://' : 'turn://';
-            const base = scheme + rest;
-            const final = wanted ? (base + (base.includes('?') ? '&' : '?') + 'transport=' + wanted) : base;
-            norm.add(final);
-          }
-          // Validate and drop malformed TURN URLs (e.g., duplicated schemes)
           const valid = /^turns?:\/\/[^\s/?#:]+(?::\d+)?(?:\?.*)?$/i;
+          for (let u of list) {
+            if (!u) continue;
+            if (valid.test(u)) { norm.add(u); continue; }
+            if (!/^turns?:/i.test(u)) { norm.add(u); continue; }
+            const raw = String(u).trim();
+            const hostOnly = raw.replace(/^turns?:\/{0,2}/i, '').replace(/^turns?:\/{0,2}/i, '').split('?')[0].split(':')[0];
+            const wanted = /transport=tcp/i.test(raw) ? 'tcp' : (/transport=udp/i.test(raw) ? 'udp' : null);
+            const rebuilt = (wanted === 'tcp')
+              ? `turns://${hostOnly}:443?transport=tcp`
+              : `turn://${hostOnly}:3478?transport=udp`;
+            norm.add(rebuilt);
+          }
           const urlsArr = Array.from(norm).filter(u => valid.test(u));
           return {
             urls: urlsArr,
