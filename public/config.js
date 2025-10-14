@@ -47,10 +47,13 @@ async function loadTurnConfig() {
         const norm = new Set();
         for (let u of list) {
           if (!/^turns?:/i.test(u)) { norm.add(u); continue; }
-          // add both TCP and UDP variants
+          // add both TCP and UDP variants with correct schemes
+          // TCP over TLS must use `turns:`; UDP must use plain `turn:`
           const base = u.replace(/([?&])transport=\w+(&|$)/i, '$1').replace(/[?&]$/, '');
-          const withTcp = base + (base.includes('?') ? '&' : '?') + 'transport=tcp';
-          const withUdp = base + (base.includes('?') ? '&' : '?') + 'transport=udp';
+          const baseTcp = base.replace(/^turn:/i, 'turns:');
+          const baseUdp = base.replace(/^turns:/i, 'turn:');
+          const withTcp = baseTcp + (baseTcp.includes('?') ? '&' : '?') + 'transport=tcp';
+          const withUdp = baseUdp + (baseUdp.includes('?') ? '&' : '?') + 'transport=udp';
           norm.add(withTcp);
           norm.add(withUdp);
         }
