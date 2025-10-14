@@ -47,10 +47,12 @@ async function loadTurnConfig() {
         const norm = new Set();
         for (let u of list) {
           if (!/^turns?:/i.test(u)) { norm.add(u); continue; }
-          // TCP-only normalization
+          // add both TCP and UDP variants
           const base = u.replace(/([?&])transport=\w+(&|$)/i, '$1').replace(/[?&]$/, '');
           const withTcp = base + (base.includes('?') ? '&' : '?') + 'transport=tcp';
+          const withUdp = base + (base.includes('?') ? '&' : '?') + 'transport=udp';
           norm.add(withTcp);
+          norm.add(withUdp);
         }
         return {
           urls: Array.from(norm),
@@ -62,7 +64,7 @@ async function loadTurnConfig() {
 
     // Сохраняем и форсим relay
     window.__TURN__ = { iceServers, forceRelay: true, expiresAt };
-    console.log('TURN config loaded (TCP-only relay)', window.__TURN__);
+    console.log('TURN config loaded (TCP+UDP relay)', window.__TURN__);
 
     // Авто-обновление: за 60 сек до истечения
     if (window.__TURN_REFRESH_T) clearTimeout(window.__TURN_REFRESH_T);

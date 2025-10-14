@@ -216,14 +216,6 @@
       if (e.candidate) {
         try { window.addLog && window.addLog('signal', 'send ice'); } catch {}
         const init = e.candidate && e.candidate.toJSON ? e.candidate.toJSON() : e.candidate;
-        // TCP-only signaling: ignore UDP candidates
-        try {
-          const line = (e.candidate && e.candidate.candidate) || String(init && init.candidate || '');
-          if (line && /\bcandidate:.*\budp\b/i.test(line)) {
-            try { window.addLog && window.addLog('webrtc','drop local UDP candidate'); } catch {}
-            return;
-          }
-        } catch {}
         window.wsSend && window.wsSend('ice', init);
       } else {
         try { window.addLog && window.addLog('webrtc', 'ice end'); } catch {}
