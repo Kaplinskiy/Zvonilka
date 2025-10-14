@@ -144,8 +144,12 @@
         window.addLog && window.addLog('webrtc', 'ICE servers: ' + flat.join(', '));
       } catch {}
       if (t.forceRelay || isMobile) cfg.iceTransportPolicy = 'relay';
+      // Log ICE config before returning
+      console.log('[ICE CONFIG DEBUG]', JSON.stringify(cfg, null, 2));
       return cfg;
     }
+    // Log fallback ICE config before returning
+    console.log('[ICE CONFIG DEBUG]', JSON.stringify(fallback, null, 2));
     return fallback;
   }
 
@@ -200,6 +204,7 @@
    */
   function createPC(onTrackCb) {
     const cfg = getIceConfig();
+    console.log('[CREATE PC DEBUG] Using config:', JSON.stringify(cfg, null, 2));
     try {
       window.addLog && window.addLog('webrtc', 'create RTCPeerConnection ' + (cfg.iceTransportPolicy ? `(policy=${cfg.iceTransportPolicy})` : ''));
     } catch {}
