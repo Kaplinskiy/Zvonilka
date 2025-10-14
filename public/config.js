@@ -2,9 +2,10 @@
 // Публичный конфиг для фронтенда. Теперь эндпоинты берём с текущего origin.
 // Это работает и в DEV (через Vite proxy), и в PROD (через nginx/node).
 
-window.__APP_CONFIG__ = { 
+window.__APP_CONFIG__ = {
   SERVER_URL: 'https://call.zababba.com/signal/create',
-  WS_URL:     'wss://call.zababba.com/ws'
+  WS_URL: 'wss://call.zababba.com/ws',
+  TURN_URL: 'turn:turn.zababba.com:443?transport=tcp'
 };
 
 // Guard flags to avoid repeated loads and updates during active calls
