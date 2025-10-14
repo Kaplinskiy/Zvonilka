@@ -135,7 +135,7 @@
             : `turn:${hostOnly}:3478?transport=udp`;
           out.add(rebuilt);
         });
-        s.urls = Array.from(out).filter(u => valid.test(u));
+        s.urls = Array.from(out).filter(u => !!u && /^turns?:/i.test(u));
         return s;
       });
       const cfg = { iceServers: norm };
@@ -178,7 +178,7 @@
               : `turn:${hostOnly}:3478?transport=udp`;
             norm.add(rebuilt);
           }
-          const urlsArr = Array.from(norm).filter(u => valid.test(u));
+          const urlsArr = Array.from(norm).filter(u => !!u && /^turns?:/i.test(u));
           return {
             urls: urlsArr,
             username: s.username || data.username,
