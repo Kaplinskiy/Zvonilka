@@ -48,17 +48,13 @@ async function loadTurnConfig() {
         const norm = new Set();
         for (let u of list) {
           if (!/^turns?:/i.test(u)) { norm.add(u); continue; }
-          // Нормализация: убираем схему и параметры, оставляем только хост
-          const raw = (u || '').trim();
-          const withoutScheme = raw
-            .replace(/^turns?:\/{0,2}/i, '')
-            .replace(/^turns?:\/{0,2}/i, ''); // убрать дублированную схему
-          const hostOnly = withoutScheme.split('?')[0].split(':')[0];
+          // Гарантированно убираем схему и оставляем только хост
+          const clean = (u || '').trim().replace(/^turns?:\/{0,2}/i, '');
+          const hostOnly = clean.split(/[/?#:]/)[0];
 
-          // TCP поверх TLS (443)
-          const withTcp = `turns://${hostOnly}:443?transport=tcp`;
-          // UDP (3478)
-          const withUdp = `turn://${hostOnly}:3478?transport=udp`;
+          // Правильные ICE URI без дублирования схемы
+          const withTcp = `turns:${hostOnly}:443?transport=tcp`;
+          const withUdp = `turn:${hostOnly}:3478?transport=udp`;
 
           norm.add(withTcp);
           norm.add(withUdp);
