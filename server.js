@@ -37,6 +37,8 @@ function createRoomHandler(_req, res) {
 app.all('/signal', createRoomHandler);
 app.all('/signal/create', createRoomHandler);
 app.all('/signal/rooms', createRoomHandler);
+// совместимость с фронтом: /signal/create/rooms
+app.all('/signal/create/rooms', createRoomHandler);
 
 // Endpoint to issue temporary TURN credentials using HMAC-SHA1 as per coturn "REST API" specification.
 // Returns iceServers configuration with credentials valid for TURN_TTL seconds.
