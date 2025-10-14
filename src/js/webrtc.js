@@ -137,9 +137,16 @@
           out.add(final);
         });
         s.urls = Array.from(out);
+        // Validate and drop malformed TURN URLs (e.g., duplicated schemes)
+        const valid = /^turns?:\/\/[^\s/?#:]+(?::\d+)?(?:\?.*)?$/i;
+        s.urls = s.urls.filter(u => valid.test(u));
         return s;
       });
       const cfg = { iceServers: norm };
+      try {
+        const flat = norm.flatMap(x => (Array.isArray(x.urls) ? x.urls : [x.urls]));
+        window.addLog && window.addLog('webrtc', 'ICE servers: ' + flat.join(', '));
+      } catch {}
       if (t.forceRelay || isMobile) cfg.iceTransportPolicy = 'relay';
       return cfg;
     }
@@ -171,8 +178,11 @@
             const final = wanted ? (base + (base.includes('?') ? '&' : '?') + 'transport=' + wanted) : base;
             norm.add(final);
           }
+          // Validate and drop malformed TURN URLs (e.g., duplicated schemes)
+          const valid = /^turns?:\/\/[^\s/?#:]+(?::\d+)?(?:\?.*)?$/i;
+          const urlsArr = Array.from(norm).filter(u => valid.test(u));
           return {
-            urls: Array.from(norm),
+            urls: urlsArr,
             username: s.username || data.username,
             credential: s.credential || data.credential,
             credentialType: s.credentialType || credType
