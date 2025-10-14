@@ -315,7 +315,8 @@
     // Proactively trigger offer if WS is already open and we have mic
     try {
       if (typeof window.isWSOpen === 'function' && window.isWSOpen() && localStream) {
-        await sendOfferIfPossible(true);
+        // fire-and-forget; do not await inside non-async function
+        sendOfferIfPossible(true).catch(()=>{});
       }
     } catch {}
     return pc;
