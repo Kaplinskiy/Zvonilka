@@ -48,18 +48,17 @@ async function loadTurnConfig() {
         const norm = new Set();
         for (let u of list) {
           if (!/^turns?:/i.test(u)) { norm.add(u); continue; }
-          // add both TCP and UDP variants with correct schemes
-          // TCP over TLS must use `turns:`; UDP must use plain `turn:`
-          const base = u.replace(/([?&])transport=\w+(&|$)/i, '$1').replace(/[?&]$/, '');
-          // TCP over TLS on 443
-          const baseTcp = base.replace(/^turn:/i, 'turns:');
-          const withTcp = baseTcp + (baseTcp.includes('?') ? '&' : '?') + 'transport=tcp';
+          // Нормализация: убираем схему и параметры, оставляем только хост
+          const raw = (u || '').trim();
+          const withoutScheme = raw
+            .replace(/^turns?:\/{0,2}/i, '')
+            .replace(/^turns?:\/{0,2}/i, ''); // убрать дублированную схему
+          const hostOnly = withoutScheme.split('?')[0].split(':')[0];
 
-          // UDP on 3478 (coturn listening-port). Force scheme turn: and port 3478.
-          let host = base.replace(/^turns?:\/\//i, '');
-          host = host.replace(/:(\d+)/, ''); // strip any explicit port
-          const baseUdp = 'turn://' + host + ':3478';
-          const withUdp = baseUdp + (baseUdp.includes('?') ? '&' : '?') + 'transport=udp';
+          // TCP поверх TLS (443)
+          const withTcp = `turns://${hostOnly}:443?transport=tcp`;
+          // UDP (3478)
+          const withUdp = `turn://${hostOnly}:3478?transport=udp`;
 
           norm.add(withTcp);
           norm.add(withUdp);
