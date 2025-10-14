@@ -125,9 +125,10 @@
           if (!/^turns?:/i.test(u)) { out.add(u); return; }
           // Extract original transport if present
           const wanted = /transport=tcp/i.test(u) ? 'tcp' : (/transport=udp/i.test(u) ? 'udp' : null);
-          // remove leading scheme (with or without //), repeat to be safe
-          let rest = u.replace(/^turns?:\/\/?/i, '');
-          rest = rest.replace(/^turns?:\/\/?/i, '');
+          // Strip any leading scheme: "turn:", "turns:", "turn://", "turns://"
+          let rest = (u || '').trim();
+          rest = rest.replace(/^turns?:\/{0,2}/i, '');
+          rest = rest.replace(/^turns?:\/{0,2}/i, '');
           rest = rest.replace(/([?&])transport=\w+(&|$)/i, '$1').replace(/[?&]$/, '');
           // Choose scheme by transport: TCP over TLS → turns://, UDP → turn://
           const scheme = (wanted === 'tcp') ? 'turns://' : 'turn://';
@@ -160,9 +161,10 @@
           for (let u of list) {
             if (!/^turns?:/i.test(u)) { norm.add(u); continue; }
             const wanted = /transport=tcp/i.test(u) ? 'tcp' : (/transport=udp/i.test(u) ? 'udp' : null);
-            // remove leading scheme (with or without //), repeat to be safe
-            let rest = u.replace(/^turns?:\/\/?/i, '');
-            rest = rest.replace(/^turns?:\/\/?/i, '');
+            // Strip any leading scheme: "turn:", "turns:", with or without slashes
+            let rest = (u || '').trim();
+            rest = rest.replace(/^turns?:\/{0,2}/i, '');
+            rest = rest.replace(/^turns?:\/{0,2}/i, '');
             rest = rest.replace(/([?&])transport=\w+(&|$)/i, '$1').replace(/[?&]$/, '');
             const scheme = (wanted === 'tcp') ? 'turns://' : 'turn://';
             const base = scheme + rest;
