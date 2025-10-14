@@ -143,7 +143,8 @@
         const flat = norm.flatMap(x => (Array.isArray(x.urls) ? x.urls : [x.urls]));
         window.addLog && window.addLog('webrtc', 'ICE servers: ' + flat.join(', '));
       } catch {}
-      if (t.forceRelay || isMobile) cfg.iceTransportPolicy = 'relay';
+      // Allow all transports during diagnosis; TURN is still preferred via urls
+      if (t.forceRelay || isMobile) cfg.iceTransportPolicy = 'all';
       // Log ICE config before returning
       console.log('[ICE CONFIG DEBUG]', JSON.stringify(cfg, null, 2));
       return cfg;
@@ -209,6 +210,10 @@
       window.addLog && window.addLog('webrtc', 'create RTCPeerConnection ' + (cfg.iceTransportPolicy ? `(policy=${cfg.iceTransportPolicy})` : ''));
     } catch {}
     pc = new RTCPeerConnection(cfg);
+    // Ensure offer is created when negotiation is needed
+    pc.onnegotiationneeded = async () => {
+      try { await sendOfferIfPossible(true); } catch {}
+    };
 
     // Extra diagnostics
     pc.onicecandidateerror = (e) => {
@@ -307,6 +312,12 @@
         pc.addTrack(track, localStream);
       }
     }
+    // Proactively trigger offer if WS is already open and we have mic
+    try {
+      if (typeof window.isWSOpen === 'function' && window.isWSOpen() && localStream) {
+        await sendOfferIfPossible(true);
+      }
+    } catch {}
     return pc;
   }
 
