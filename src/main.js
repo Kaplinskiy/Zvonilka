@@ -535,6 +535,13 @@ function renderLangSwitch(active) {
    */
   function doCleanup(reason = 'user-hangup') {
     // Guard: ignore premature peer-bye while PC not established
+    // в main.js, в начале doCleanup
+    console.debug('[CLEANUP]', reason,
+      'sig=', window.getPC()?.signalingState,
+      'ice=', window.getPC()?.iceConnectionState,
+      'conn=', window.getPC()?.connectionState);
+    // и в onSignal, перед case 'bye'
+    console.debug('[BYE-IN raw]', msg);
     try {
       const pc = (window.getPC && window.getPC()) || (window.__WEBRTC__ && window.__WEBRTC__.getPC && window.__WEBRTC__.getPC());
       const ice = pc && pc.iceConnectionState;
