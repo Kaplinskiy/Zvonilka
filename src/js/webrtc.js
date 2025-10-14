@@ -132,7 +132,7 @@
           const wanted = /transport=tcp/i.test(raw) ? 'tcp' : (/transport=udp/i.test(raw) ? 'udp' : null);
           const rebuilt = (wanted === 'tcp')
             ? `turns:${hostOnly}:443?transport=tcp`
-            : `turn:${hostOnly}:3478`;
+            : `turn:${hostOnly}:3478?transport=udp`;
           out.add(rebuilt);
         });
         s.urls = Array.from(out).filter(u => valid.test(u));
@@ -175,7 +175,7 @@
             const wanted = /transport=tcp/i.test(raw) ? 'tcp' : (/transport=udp/i.test(raw) ? 'udp' : null);
             const rebuilt = (wanted === 'tcp')
               ? `turns:${hostOnly}:443?transport=tcp`
-              : `turn:${hostOnly}:3478`;
+              : `turn:${hostOnly}:3478?transport=udp`;
             norm.add(rebuilt);
           }
           const urlsArr = Array.from(norm).filter(u => valid.test(u));
