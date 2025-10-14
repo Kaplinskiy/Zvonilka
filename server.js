@@ -23,6 +23,24 @@ const TURN_URLS = (process.env.TURN_URLS || 'turns:turn.zababba.com:443?transpor
 const _ttl = Number.parseInt(process.env.TURN_TTL || '120', 10);
 const TURN_TTL = Number.isFinite(_ttl) ? Math.min(Math.max(_ttl, 60), 3600) : 120;
 
+// Build canonical TURN URL set (both TCP/TLS 443 and UDP 3478) from any input
+function buildTurnUrls(urls) {
+  const out = new Set();
+  const list = Array.isArray(urls) ? urls : (urls ? [urls] : []);
+  for (let u of list) {
+    if (!u) continue;
+    const raw = String(u).trim();
+    // strip scheme and query; leave only host
+    const withoutScheme = raw.replace(/^turns?:\/{0,2}/i, '').replace(/^turns?:\/{0,2}/i, '');
+    const hostOnly = withoutScheme.split('?')[0].split(':')[0];
+    if (!hostOnly) continue;
+    // canonical pair
+    out.add(`turns:${hostOnly}:443?transport=tcp`);
+    out.add(`turn:${hostOnly}:3478?transport=udp`);
+  }
+  return Array.from(out);
+}
+
 // Limit for incoming WebSocket message size (default 64 KiB)
 const MAX_MSG_BYTES = Number.parseInt(process.env.WS_MAX_MSG_BYTES || '65536', 10);
 
@@ -56,8 +74,9 @@ app.get('/turn-credentials', (req, res) => {
 
     // Prevent caching of credentials by clients
     res.set('Cache-Control', 'no-store');
+    const urls = buildTurnUrls(TURN_URLS);
     return res.json({
-      iceServers: [{ urls: TURN_URLS, username, credential }],
+      iceServers: [{ urls, username, credential, credentialType: 'password' }],
       ttl: TURN_TTL
     });
   } catch {
