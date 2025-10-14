@@ -125,9 +125,9 @@
           if (!/^turns?:/i.test(u)) { out.add(u); return; }
           // Extract original transport if present
           const wanted = /transport=tcp/i.test(u) ? 'tcp' : (/transport=udp/i.test(u) ? 'udp' : null);
-          // Strip any transport param and any duplicate scheme occurrences
-          let rest = u.replace(/^turns?:\/\//i, '');          // remove leading scheme
-          rest = rest.replace(/^turns?:\/\//i, '');            // remove accidental second scheme if present
+          // remove leading scheme (with or without //), repeat to be safe
+          let rest = u.replace(/^turns?:\/\/?/i, '');
+          rest = rest.replace(/^turns?:\/\/?/i, '');
           rest = rest.replace(/([?&])transport=\w+(&|$)/i, '$1').replace(/[?&]$/, '');
           // Choose scheme by transport: TCP over TLS → turns://, UDP → turn://
           const scheme = (wanted === 'tcp') ? 'turns://' : 'turn://';
@@ -160,8 +160,9 @@
           for (let u of list) {
             if (!/^turns?:/i.test(u)) { norm.add(u); continue; }
             const wanted = /transport=tcp/i.test(u) ? 'tcp' : (/transport=udp/i.test(u) ? 'udp' : null);
-            let rest = u.replace(/^turns?:\/\//i, '');
-            rest = rest.replace(/^turns?:\/\//i, '');
+            // remove leading scheme (with or without //), repeat to be safe
+            let rest = u.replace(/^turns?:\/\/?/i, '');
+            rest = rest.replace(/^turns?:\/\/?/i, '');
             rest = rest.replace(/([?&])transport=\w+(&|$)/i, '$1').replace(/[?&]$/, '');
             const scheme = (wanted === 'tcp') ? 'turns://' : 'turn://';
             const base = scheme + rest;
