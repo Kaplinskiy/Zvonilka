@@ -123,11 +123,17 @@
         const out = new Set();
         list.forEach((u) => {
           if (!/^turns?:/i.test(u)) { out.add(u); return; }
-          // base URL without any transport parameter
-          const base = u.replace(/([?&])transport=\w+(&|$)/i, '$1').replace(/[?&]$/, '');
-          // TCP-only for all clients
-          const tcp = base + (base.includes('?') ? '&' : '?') + 'transport=tcp';
-          out.add(tcp);
+          // Extract original transport if present
+          const wanted = /transport=tcp/i.test(u) ? 'tcp' : (/transport=udp/i.test(u) ? 'udp' : null);
+          // Strip any transport param and any duplicate scheme occurrences
+          let rest = u.replace(/^turns?:\/\//i, '');          // remove leading scheme
+          rest = rest.replace(/^turns?:\/\//i, '');            // remove accidental second scheme if present
+          rest = rest.replace(/([?&])transport=\w+(&|$)/i, '$1').replace(/[?&]$/, '');
+          // Choose scheme by transport: TCP over TLS → turns://, UDP → turn://
+          const scheme = (wanted === 'tcp') ? 'turns://' : 'turn://';
+          const base = scheme + rest;
+          const final = wanted ? (base + (base.includes('?') ? '&' : '?') + 'transport=' + wanted) : base;
+          out.add(final);
         });
         s.urls = Array.from(out);
         return s;
@@ -153,9 +159,14 @@
           const norm = new Set();
           for (let u of list) {
             if (!/^turns?:/i.test(u)) { norm.add(u); continue; }
-            const base = u.replace(/([?&])transport=\w+(&|$)/i, '$1').replace(/[?&]$/, '');
-            const withTcp = base + (base.includes('?') ? '&' : '?') + 'transport=tcp';
-            norm.add(withTcp);
+            const wanted = /transport=tcp/i.test(u) ? 'tcp' : (/transport=udp/i.test(u) ? 'udp' : null);
+            let rest = u.replace(/^turns?:\/\//i, '');
+            rest = rest.replace(/^turns?:\/\//i, '');
+            rest = rest.replace(/([?&])transport=\w+(&|$)/i, '$1').replace(/[?&]$/, '');
+            const scheme = (wanted === 'tcp') ? 'turns://' : 'turn://';
+            const base = scheme + rest;
+            const final = wanted ? (base + (base.includes('?') ? '&' : '?') + 'transport=' + wanted) : base;
+            norm.add(final);
           }
           return {
             urls: Array.from(norm),
