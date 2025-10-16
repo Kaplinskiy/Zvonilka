@@ -1,0 +1,9 @@
+dbaeumer.vscode-eslint
+esbenp.prettier-vscode
+ms-python.python
+ms-python.black-formatter
+ms-toolsai.jupyter
+ms-playwright.playwright
+eamodio.gitlens
+streetsidesoftware.code-spell-checker
+EditorConfig.EditorConfig

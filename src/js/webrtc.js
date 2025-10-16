@@ -1,7 +1,7 @@
 // public/js/webrtc.js
 // WebRTC logic. Exposes functions on the window object for use in index.html.
 // This script is loaded before a large inline script.
-
+// test
 (function () {
   // RTCPeerConnection instance
   let pc = null;
@@ -58,7 +58,7 @@
     }
     try { await pc.addIceCandidate(init); } catch {}
   }
-  
+
   async function applyAnswer(ans){
     if (!pc) throw new Error('pc is not initialized');
     // Extract SDP string from various shapes: string | {sdp} | {payload:{sdp}} | {answer:{sdp}} | {sdp:{sdp}}
