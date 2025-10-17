@@ -363,8 +363,10 @@ function renderLangSwitch(active) {
         }
         case 'member.joined': {
           try {
-            // Не отправляем оффер из main.js — это делает webrtc.js через onnegotiationneeded.
             logT('signal', 'debug.signal_recv_member_joined');
+            if (role === 'caller' && typeof window.sendOfferIfPossible === 'function') {
+              await window.sendOfferIfPossible(); // guarded: only once, only when stable
+            }
           } catch (e) {
             logT('error', 'error.member_joined_handler', { msg: (e?.message || String(e)) });
           }
