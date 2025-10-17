@@ -327,21 +327,19 @@ function renderLangSwitch(active) {
   let pendingOffer = null;
   let offerAttempted = false;
 
-  // Guard duplicate or wrong-role offer attempts from legacy helpers
+  // Guard duplicate or wrong-role offer attempts: allow only one offer, only in stable state, ignore force param
   (function guardOfferOnce(){
     const origSend = window.sendOfferIfPossible;
-    window.sendOfferIfPossible = async function(force){
+    window.sendOfferIfPossible = async function(){
       // Only caller is allowed to send an offer
-      if (role !== 'caller') {
-        try { console.debug('[OFFER-GUARD] blocked: not caller'); } catch {}
-        return;
-      }
-      if (offerAttempted && !force) {
-        try { console.debug('[OFFER-GUARD] blocked: already attempted'); } catch {}
-        return;
-      }
+      if (role !== 'caller') { try{ console.debug('[OFFER-GUARD] blocked: not caller'); }catch{}; return; }
+      const pc = (window.getPC && window.getPC()) || (window.__WEBRTC__ && window.__WEBRTC__.getPC && window.__WEBRTC__.getPC());
+      const st = pc && pc.signalingState;
+      if (offerAttempted) { try{ console.debug('[OFFER-GUARD] blocked: already attempted'); }catch{}; return; }
+      if (st && st !== 'stable') { try{ console.debug('[OFFER-GUARD] blocked: signalingState=', st); }catch{}; return; }
+      // mark before calling to protect against concurrent callers
       offerAttempted = true;
-      if (typeof origSend === 'function') return await origSend(force);
+      if (typeof origSend === 'function') return await origSend();
       if (typeof window.createAndSendOffer === 'function') return await window.createAndSendOffer();
     };
   })();
@@ -370,7 +368,7 @@ function renderLangSwitch(active) {
           try {
             if (role === 'caller' && !offerAttempted) {
               if (typeof window.sendOfferIfPossible === 'function') {
-                await window.sendOfferIfPossible(true); // force
+                await window.sendOfferIfPossible();
                 offerAttempted = true;
                 logT('webrtc', 'webrtc.offer_sent_caller');
               } else if (typeof window.createAndSendOffer === 'function') {
