@@ -106,6 +106,13 @@
     try {
       localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (window.addLog) window.addLog('info', 'mic ok');
+      try {
+        const r = new URLSearchParams(location.search).get('role');
+        if (r === 'caller' && typeof window.sendOfferIfPossible === 'function') {
+          // guarantee initial offer after mic capture for caller
+          await window.sendOfferIfPossible();
+        }
+      } catch {}
       return localStream;
     } catch (e) {
       window.addLog && window.addLog('error', 'mic error: ' + (e.message || e));
