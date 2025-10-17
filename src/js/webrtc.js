@@ -329,13 +329,7 @@
         if (!hasSameKind) pc.addTrack(track, localStream);
       }
     }
-    // Proactively trigger offer if WS is already open and we have mic
-    try {
-      if (typeof window.isWSOpen === 'function' && window.isWSOpen() && localStream) {
-        // fire-and-forget; do not await inside non-async function
-        sendOfferIfPossible().catch(()=>{});
-      }
-    } catch {}
+
     return pc;
   }
 
