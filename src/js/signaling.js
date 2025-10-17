@@ -146,8 +146,21 @@ function connectWS(role, roomId, onMessage) {
       };
 
       _ws.onmessage = (ev) => {
+        try { console.debug('[WS-IN]', ev.data); } catch {}
         let msg;
         try { msg = JSON.parse(ev.data); } catch { msg = ev.data; }
+        // Normalize: turn raw strings or alias types into canonical objects
+        try {
+          if (typeof msg === 'string') {
+            // Some backends forward plain candidate lines
+            if (/^candidate:/.test(msg)) msg = { type: 'ice', candidate: msg };
+          } else if (msg && typeof msg === 'object') {
+            const t = String(msg.type || '').toLowerCase();
+            if (t === 'icecandidate' || t === 'candidate') {
+              msg = { type: 'ice', candidate: (msg.candidate ?? msg.payload ?? msg.data ?? null) };
+            }
+          }
+        } catch {}
         try { window.__SIG_HOOK && window.__SIG_HOOK(msg); } catch {}
 
         // Ignore ping messages from server
