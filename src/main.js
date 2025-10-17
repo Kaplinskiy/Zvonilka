@@ -568,7 +568,8 @@ function renderLangSwitch(active) {
     }
     if (btnAnswer) btnAnswer.classList.add('hidden');
     if (shareWrap) shareWrap.classList.add('hidden');
-    setStatusKey('call.ended', 'warn-txt');
+    const peerEnded = (reason === 'peer-bye');
+    setStatusKey('call.ended', peerEnded ? 'ok' : 'warn-txt');
     if (noteEl) noteEl.textContent = '';
     offerAttempted = false;
     role = null; roomId = null;
