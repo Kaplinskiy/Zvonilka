@@ -212,7 +212,7 @@
     pc = new RTCPeerConnection(cfg);
     // Ensure offer is created when negotiation is needed
     pc.onnegotiationneeded = async () => {
-      try { await sendOfferIfPossible(true); } catch {}
+      try { await sendOfferIfPossible(); } catch {}
     };
 
     // Extra diagnostics
@@ -306,6 +306,14 @@
       if (onTrackCb) onTrackCb(e.streams[0]);
     };
 
+    // Ensure a stable transceiver order to keep m-lines consistent
+    try {
+      const tx = pc.getTransceivers ? pc.getTransceivers() : [];
+      if (!tx || tx.length === 0) {
+        pc.addTransceiver('audio', { direction: 'sendrecv' });
+      }
+    } catch {}
+
     // Add all local media tracks to the peer connection for sending to remote peer
     if (localStream) {
       for (const track of localStream.getTracks()) {
@@ -316,7 +324,7 @@
     try {
       if (typeof window.isWSOpen === 'function' && window.isWSOpen() && localStream) {
         // fire-and-forget; do not await inside non-async function
-        sendOfferIfPossible(true).catch(()=>{});
+        sendOfferIfPossible().catch(()=>{});
       }
     } catch {}
     return pc;
@@ -324,16 +332,18 @@
 
   /**
    * Creates and sends an SDP offer to the remote peer if the signaling WebSocket is open,
-   * and if an offer has not already been sent (unless forced).
+   * and if an offer has not already been sent and the signaling state is stable.
    * Updates internal state to reflect that an offer has been sent.
    * Logs signaling activity and errors.
-   * @param {boolean} force - If true, forces sending an offer even if one was sent before.
    */
-  async function sendOfferIfPossible(force = false) {
+  async function sendOfferIfPossible() {
     try {
       if (!(window.isWSOpen && window.isWSOpen())) return;
       if (!pc || !localStream) return;
-      if (offerSent && !force) return;
+      // allow only when stable and not already sent
+      const st = pc.signalingState;
+      if (offerSent) return;
+      if (st && st !== 'stable') return;
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       window.wsSend && window.wsSend('offer', offer);
