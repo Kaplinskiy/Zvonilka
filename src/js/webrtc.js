@@ -13,6 +13,7 @@
   let pendingOffer = null;
   // Flag indicating whether an offer has been sent to the remote peer
   let offerSent = false;
+  let offerInProgress = false;
   // Flag indicating whether the remote description has been applied to the peer connection
   let remoteDescApplied = false;
 
@@ -306,18 +307,22 @@
       if (onTrackCb) onTrackCb(e.streams[0]);
     };
 
-    // Ensure a stable transceiver order to keep m-lines consistent
+    // Ensure a stable transceiver order to keep m-lines consistent: exactly one audio transceiver
     try {
       const tx = pc.getTransceivers ? pc.getTransceivers() : [];
       if (!tx || tx.length === 0) {
         pc.addTransceiver('audio', { direction: 'sendrecv' });
+      } else if (tx.length > 1) {
+        // do not add more, rely on single audio m-line
       }
     } catch {}
 
-    // Add all local media tracks to the peer connection for sending to remote peer
+    // Add all local media tracks, avoiding duplicates for the same kind
     if (localStream) {
+      const senders = pc.getSenders ? pc.getSenders() : [];
       for (const track of localStream.getTracks()) {
-        pc.addTrack(track, localStream);
+        const hasSameKind = senders.some(s => s.track && s.track.kind === track.kind);
+        if (!hasSameKind) pc.addTrack(track, localStream);
       }
     }
     // Proactively trigger offer if WS is already open and we have mic
@@ -340,17 +345,22 @@
     try {
       if (!(window.isWSOpen && window.isWSOpen())) return;
       if (!pc || !localStream) return;
-      // allow only when stable and not already sent
+      if (offerSent || offerInProgress) return;
       const st = pc.signalingState;
-      if (offerSent) return;
       if (st && st !== 'stable') return;
-      const offer = await pc.createOffer();
+      // mutex to avoid concurrent createOffer
+      offerInProgress = true;
+      const offer = await pc.createOffer({ offerToReceiveAudio: 1 });
       await pc.setLocalDescription(offer);
       window.wsSend && window.wsSend('offer', offer);
       offerSent = true;
       window.addLog && window.addLog('signal', 'send offer');
     } catch (e) {
+      // allow retry on next negotiation
+      offerSent = false;
       window.addLog && window.addLog('error', 'sendOfferIfPossible: ' + (e.message || e));
+    } finally {
+      offerInProgress = false;
     }
   }
 
