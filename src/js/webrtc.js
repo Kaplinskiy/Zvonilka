@@ -21,7 +21,12 @@
   let negotiationScheduled = false;
 
   function __getRole(){
-    try { return new URLSearchParams(location.search).get('role') || null; } catch { return null; }
+    try {
+      const fromUrl = new URLSearchParams(location.search).get('role');
+      if (fromUrl) return fromUrl;
+      if (typeof window !== 'undefined' && window.role) return window.role; // fallback to app state
+      return null;
+    } catch { return (typeof window !== 'undefined' ? window.role || null : null); }
   }
   // Flag indicating whether the remote description has been applied to the peer connection
   let remoteDescApplied = false;
