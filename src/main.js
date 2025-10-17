@@ -356,6 +356,13 @@ function renderLangSwitch(active) {
     try {
       try { window.__SIG_HOOK && window.__SIG_HOOK(msg); } catch {}
       if (!msg || typeof msg !== 'object') return;
+      // Normalize alias types from server so ICE always goes through one path
+      try {
+        if (msg && typeof msg.type === 'string') {
+          const t = msg.type.toLowerCase();
+          if (t === 'candidate' || t === 'icecandidate') msg.type = 'ice';
+        }
+      } catch {}
       switch (msg.type) {
         case 'hello': {
           memberId = msg.memberId || memberId;
@@ -485,6 +492,7 @@ function renderLangSwitch(active) {
           break;
         }
         case 'ice': {
+          try { console.debug('[ICE-IN]', msg); } catch {}
           // Normalize various envelopes: {candidate}, {payload:{candidate}}, raw string, or end-of-candidates
           let cand = undefined;
           if (msg) {
