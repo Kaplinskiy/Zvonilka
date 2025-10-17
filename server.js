@@ -213,17 +213,26 @@ wss.on('connection', (ws) => {
         } else if (msg.type === 'answer' && msg.payload && !msg.sdp) {
           msg = { type: 'answer', sdp: msg.payload };
         } else if (msg.type === 'ice') {
-          // unify ice format: { type:'ice', candidate:<object|string|null> }
-          if (msg.payload && typeof msg.payload === 'object' && 'candidate' in msg.payload) {
-            msg = { type: 'ice', candidate: msg.payload.candidate };
-          } else if ('candidate' in msg) {
-            msg = { type: 'ice', candidate: msg.candidate };
-          } else if (msg.payload === null || msg.candidate === null || msg.data === null) {
-            msg = { type: 'ice', candidate: null }; // end-of-candidates
+          // Preserve full RTCIceCandidateInit fields when forwarding
+          const pick = (v) => (v && typeof v === 'object') ? v : (v !== undefined ? { candidate: v } : null);
+          let candObj = null;
+          if (msg && typeof msg === 'object') {
+            if (msg.payload && typeof msg.payload === 'object') {
+              // payload may be {candidate, sdpMid, sdpMLineIndex}
+              candObj = pick('candidate' in msg.payload ? msg.payload : msg.payload.candidate);
+            } else if ('candidate' in msg) {
+              candObj = pick(msg.candidate);
+            } else if (msg.payload === null || msg.candidate === null || msg.data === null) {
+              candObj = null; // end-of-candidates
+            }
           }
-          // if candidate is a nested object wrapper {candidate:{...}}, unwrap
-          if (msg && msg.candidate && typeof msg.candidate === 'object' && 'candidate' in msg.candidate && !('sdpMid' in msg.candidate)) {
-            msg.candidate = msg.candidate.candidate;
+          if (candObj === null) {
+            msg = { type: 'ice', candidate: null };
+          } else if (candObj) {
+            // Ensure at least {candidate: string, sdpMid|sdpMLineIndex}
+            msg = { type: 'ice', ...candObj };
+          } else {
+            // If still unknown shape, leave as-is
           }
         }
       }
