@@ -602,7 +602,6 @@ function renderLangSwitch(active) {
     role = 'callee';
     roomId = rid;
     roomId = roomId ? String(roomId).replace(/[^A-Za-z0-9_-]/g, '') : roomId;
-    await connectWS('callee', roomId, onSignal);
     setRoleLabel(false);
     setStatusKey('ws.waiting_offer', 'ok');
     if (btnAnswer) btnAnswer.classList.remove('hidden');
