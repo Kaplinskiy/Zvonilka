@@ -111,13 +111,6 @@
     try {
       localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (window.addLog) window.addLog('info', 'mic ok');
-      try {
-        const r = new URLSearchParams(location.search).get('role');
-        if (r === 'caller' && typeof window.sendOfferIfPossible === 'function') {
-          // guarantee initial offer after mic capture for caller
-          await window.sendOfferIfPossible();
-        }
-      } catch {}
       return localStream;
     } catch (e) {
       window.addLog && window.addLog('error', 'mic error: ' + (e.message || e));
@@ -236,6 +229,7 @@
     pc.onnegotiationneeded = () => {
       const r = __getRole();
       if (r !== 'caller') return; // only caller initiates offer
+      if (typeof window !== 'undefined' && window.__OFFER_SENT__) return;
       if (negotiationScheduled) return;
       negotiationScheduled = true;
       setTimeout(async () => {
@@ -363,6 +357,7 @@
    * Logs signaling activity and errors.
    */
   async function sendOfferIfPossible() {
+    if (typeof window !== 'undefined' && window.__OFFER_SENT__) return;
     const r = __getRole();
     if (r !== 'caller') return; // callee never sends offer
     try {
@@ -378,6 +373,7 @@
       const payload = { type: 'offer', sdp: offer.sdp, offer: { type: 'offer', sdp: offer.sdp } };
       window.wsSend && window.wsSend('offer', payload);
       offerSent = true;
+      try { if (typeof window !== 'undefined') window.__OFFER_SENT__ = true; } catch {}
       window.addLog && window.addLog('signal', 'send offer');
     } catch (e) {
       // allow retry on next negotiation
