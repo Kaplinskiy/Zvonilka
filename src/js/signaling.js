@@ -15,6 +15,16 @@
   let _ws = null;
   let _pingTimer = null;
 
+  // Global mirrors for current WS state (used to prevent duplicate connects)
+  try {
+    if (typeof window !== 'undefined') {
+      window.__WS__ = window.__WS__ || null;
+      window.__WS_ROOM__ = window.__WS_ROOM__ || null;
+      window.__WS_ROLE__ = window.__WS_ROLE__ || null;
+      window.__WS_BEFOREUNLOAD_BOUND__ = window.__WS_BEFOREUNLOAD_BOUND__ || false;
+    }
+  } catch {}
+
   /**
    * Lightweight internationalization helper function.
    * Attempts to use i18next if available on the window object,
@@ -113,6 +123,17 @@ function connectWS(role, roomId, onMessage) {
       window.addLog && window.addLog('signal', `connect WS ${url}`);
 
       _ws = new WebSocket(url);
+      try {
+        if (typeof window !== 'undefined') {
+          window.__WS__ = _ws;
+          window.__WS_ROOM__ = roomId;
+          window.__WS_ROLE__ = role;
+          if (!window.__WS_BEFOREUNLOAD_BOUND__) {
+            window.addEventListener('beforeunload', () => { try { _ws && _ws.close(1000, 'leave'); } catch {} });
+            window.__WS_BEFOREUNLOAD_BOUND__ = true;
+          }
+        }
+      } catch {}
 
       _ws.onopen = () => {
         window.addLog && window.addLog('signal', 'ws open');
@@ -150,6 +171,7 @@ function connectWS(role, roomId, onMessage) {
       _ws.onclose = (e) => {
         window.addLog && window.addLog('signal', `ws close code=${e.code} reason=${e.reason || '-'}`);
         if (_pingTimer) { clearInterval(_pingTimer); _pingTimer = null; }
+        try { if (window.__WS__ === _ws) { window.__WS__ = null; window.__WS_ROOM__ = null; window.__WS_ROLE__ = null; } } catch {}
 
         // If the socket closed cleanly (normal closure codes), do not attempt reconnect
         const normal = (e.code === 1000 || e.code === 1005);
@@ -185,11 +207,15 @@ function connectWS(role, roomId, onMessage) {
       };
     };
 
-    // Avoid opening multiple connections if one is already open
-    if (_ws && _ws.readyState === WebSocket.OPEN) {
-      window.addLog && window.addLog('warn', `WS already connected (${role})`);
-      resolve({ memberId: 'already-open' });
-      return;
+    // Avoid opening multiple connections; if open to other room/role, close and reopen
+    if (_ws && (_ws.readyState === WebSocket.OPEN || _ws.readyState === WebSocket.CONNECTING)) {
+      const same = (window.__WS_ROOM__ === roomId && window.__WS_ROLE__ === role);
+      if (same) {
+        window.addLog && window.addLog('warn', `WS already connected (${role})`);
+        resolve({ memberId: 'already-open' });
+        return;
+      }
+      try { _ws.close(1000, 'switch-room-or-role'); } catch {}
     }
 
     openSocket();
