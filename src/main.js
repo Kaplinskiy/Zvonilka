@@ -496,14 +496,6 @@ function renderLangSwitch(active) {
             cand = cand.candidate;
           }
 
-          // TCP-only mode: ignore UDP candidates to match server config
-          try {
-            const line = (typeof cand === 'string') ? cand : cand && cand.candidate;
-            if (line && /\bcandidate:.*\budp\b/i.test(line)) {
-              try { console.debug('[ICE DROP] UDP candidate ignored'); } catch {}
-              break;
-            }
-          } catch {}
 
           if (cand && typeof cand === 'object') {
             try { await addRemoteIce(cand); }
