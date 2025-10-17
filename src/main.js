@@ -337,10 +337,17 @@ function renderLangSwitch(active) {
       const st = pc && pc.signalingState;
       if (offerAttempted) { try{ console.debug('[OFFER-GUARD] blocked: already attempted'); }catch{}; return; }
       if (st && st !== 'stable') { try{ console.debug('[OFFER-GUARD] blocked: signalingState=', st); }catch{}; return; }
-      // mark before calling to protect against concurrent callers
-      offerAttempted = true;
-      if (typeof origSend === 'function') return await origSend();
-      if (typeof window.createAndSendOffer === 'function') return await window.createAndSendOffer();
+      // call underlying implementation first; set flag only after it returns
+      if (typeof origSend === 'function') {
+        const r = await origSend();
+        offerAttempted = true;
+        return r;
+      }
+      if (typeof window.createAndSendOffer === 'function') {
+        const r = await window.createAndSendOffer();
+        offerAttempted = true;
+        return r;
+      }
     };
   })();
 
@@ -365,6 +372,7 @@ function renderLangSwitch(active) {
           try {
             logT('signal', 'debug.signal_recv_member_joined');
             if (role === 'caller' && typeof window.sendOfferIfPossible === 'function') {
+              offerAttempted = false; // allow first real offer after peer appears
               await window.sendOfferIfPossible(); // оффер только после входа второго участника
             }
           } catch (e) {
