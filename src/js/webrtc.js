@@ -19,6 +19,10 @@
   let offerSent = false;
   let offerInProgress = false;
   let negotiationScheduled = false;
+
+  function __getRole(){
+    try { return new URLSearchParams(location.search).get('role') || null; } catch { return null; }
+  }
   // Flag indicating whether the remote description has been applied to the peer connection
   let remoteDescApplied = false;
 
@@ -218,6 +222,8 @@
     pc = new RTCPeerConnection(cfg);
     // Ensure offer is created when negotiation is needed (debounced to avoid double fires)
     pc.onnegotiationneeded = () => {
+      const r = __getRole();
+      if (r !== 'caller') return; // only caller initiates offer
       if (negotiationScheduled) return;
       negotiationScheduled = true;
       setTimeout(async () => {
@@ -345,6 +351,8 @@
    * Logs signaling activity and errors.
    */
   async function sendOfferIfPossible() {
+    const r = __getRole();
+    if (r !== 'caller') return; // callee never sends offer
     try {
       if (!(window.isWSOpen && window.isWSOpen())) return;
       if (!pc || !localStream) return;
