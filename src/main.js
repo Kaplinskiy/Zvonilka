@@ -371,9 +371,27 @@ function renderLangSwitch(active) {
         case 'member.joined': {
           try {
             logT('signal', 'debug.signal_recv_member_joined');
-            if (role === 'caller' && typeof window.sendOfferIfPossible === 'function') {
-              offerAttempted = false; // allow first real offer after peer appears
-              await window.sendOfferIfPossible(); // оффер только после входа второго участника
+            if (role === 'caller') {
+              // allow first real offer after peer appears
+              offerAttempted = false;
+              // choose implementation from window or __WEBRTC__
+              const sendFn = (window.sendOfferIfPossible)
+                           || (window.__WEBRTC__ && window.__WEBRTC__.sendOfferIfPossible);
+              // wait for PC to exist and be stable before creating offer
+              try {
+                const t0 = Date.now();
+                while (Date.now() - t0 < 2000) {
+                  const pcw = (window.getPC && window.getPC());
+                  if (pcw && (!pcw.signalingState || pcw.signalingState === 'stable')) break;
+                  await new Promise(r => setTimeout(r, 80));
+                }
+              } catch {}
+              if (typeof sendFn === 'function') {
+                try { console.debug('[OFFER] calling sendOfferIfPossible via', (sendFn === window.sendOfferIfPossible ? 'window' : '__WEBRTC__')); } catch {}
+                await sendFn(); // оффер только после входа второго участника
+              } else {
+                try { console.debug('[OFFER] sendOfferIfPossible not found on window or __WEBRTC__'); } catch {}
+              }
             }
           } catch (e) {
             logT('error', 'error.member_joined_handler', { msg: (e?.message || String(e)) });
