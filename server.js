@@ -172,12 +172,26 @@ wss.on('connection', (ws) => {
       try {
         msg = JSON.parse(data.toString());
       } catch {
-        // Ignore invalid JSON messages silently.
-        return;
+        const raw = data && data.toString ? data.toString() : '';
+        if (raw && /^candidate:/.test(raw)) {
+          msg = { type: 'ice', candidate: raw };
+        } else {
+          // Ignore invalid non-ICE JSON messages silently.
+          return;
+        }
       }
 
       if (msg?.type) {
         console.log(`[SIGNAL IN] ${roomId}`, msg.type, msg.candidate ? 'ICE' : '', msg.sdp ? 'SDP' : '');
+      }
+
+      // Normalize alias ICE message types
+      if (msg && typeof msg === 'object') {
+        const t = String(msg.type || '').toLowerCase();
+        if (t === 'candidate' || t === 'icecandidate') {
+          const cand = (msg.candidate ?? msg.payload ?? msg.data ?? null);
+          msg = { type: 'ice', candidate: cand };
+        }
       }
 
       // Handle ping messages by responding with a ping to keep the connection alive.
@@ -199,15 +213,17 @@ wss.on('connection', (ws) => {
         } else if (msg.type === 'answer' && msg.payload && !msg.sdp) {
           msg = { type: 'answer', sdp: msg.payload };
         } else if (msg.type === 'ice') {
-          // unify ice format: { type:'ice', candidate:<object|null> }
-          if (msg.payload && typeof msg.payload === 'object' && msg.payload.candidate) {
+          // unify ice format: { type:'ice', candidate:<object|string|null> }
+          if (msg.payload && typeof msg.payload === 'object' && 'candidate' in msg.payload) {
             msg = { type: 'ice', candidate: msg.payload.candidate };
-          } else if (msg.payload && typeof msg.payload === 'object' && ('candidate' in msg.payload)) {
-            msg = { type: 'ice', candidate: msg.payload.candidate };
-          } else if ('payload' in msg && msg.payload === null) {
-            msg = { type: 'ice', candidate: null };
           } else if ('candidate' in msg) {
             msg = { type: 'ice', candidate: msg.candidate };
+          } else if (msg.payload === null || msg.candidate === null || msg.data === null) {
+            msg = { type: 'ice', candidate: null }; // end-of-candidates
+          }
+          // if candidate is a nested object wrapper {candidate:{...}}, unwrap
+          if (msg && msg.candidate && typeof msg.candidate === 'object' && 'candidate' in msg.candidate && !('sdpMid' in msg.candidate)) {
+            msg.candidate = msg.candidate.candidate;
           }
         }
       }
