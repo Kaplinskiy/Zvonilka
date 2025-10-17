@@ -327,6 +327,25 @@ function renderLangSwitch(active) {
   let pendingOffer = null;
   let offerAttempted = false;
 
+  // Guard duplicate or wrong-role offer attempts from legacy helpers
+  (function guardOfferOnce(){
+    const origSend = window.sendOfferIfPossible;
+    window.sendOfferIfPossible = async function(force){
+      // Only caller is allowed to send an offer
+      if (role !== 'caller') {
+        try { console.debug('[OFFER-GUARD] blocked: not caller'); } catch {}
+        return;
+      }
+      if (offerAttempted && !force) {
+        try { console.debug('[OFFER-GUARD] blocked: already attempted'); } catch {}
+        return;
+      }
+      offerAttempted = true;
+      if (typeof origSend === 'function') return await origSend(force);
+      if (typeof window.createAndSendOffer === 'function') return await window.createAndSendOffer();
+    };
+  })();
+
   // --- SIGNALING MESSAGE HANDLER ---
   /**
    * Handle incoming signaling messages and update the app state accordingly.
@@ -375,6 +394,8 @@ function renderLangSwitch(active) {
         }
         case 'offer': {
           logT('signal', 'debug.signal_recv_offer');
+          // If we are also a caller, ignore incoming offer to avoid glare
+          if (role === 'caller') { logT('warn', 'warn.ignore_offer_on_caller'); break; }
           // Normalize {type:'offer', sdp} or legacy {payload|offer}
           const _sdp = msg?.sdp || msg?.payload?.sdp || null;
           pendingOffer = _sdp ? { type: 'offer', sdp: _sdp } : (msg.payload || msg.offer || null);
@@ -569,7 +590,7 @@ function renderLangSwitch(active) {
     if (btnAnswer) btnAnswer.classList.add('hidden');
     if (shareWrap) shareWrap.classList.add('hidden');
     const peerEnded = (reason === 'peer-bye');
-    setStatusKey('call.ended', peerEnded ? 'ok' : 'warn-txt');
+    setStatusKey(peerEnded ? 'call.ended_by_peer' : 'call.ended', peerEnded ? 'ok' : 'warn-txt');
     if (noteEl) noteEl.textContent = '';
     offerAttempted = false;
     role = null; roomId = null;
