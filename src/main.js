@@ -649,7 +649,15 @@ function renderLangSwitch(active) {
     if (!isWSOpen()) await connectWS('callee', roomId, onSignal);
     else logT('warn', 'warn.ws_already_connected_callee');
 
-    const offerToUse = pendingOffer || window.__PENDING_OFFER || window.__LAST_OFFER || null;
+    let offerToUse = pendingOffer || window.__PENDING_OFFER || window.__LAST_OFFER || null;
+    if (!offerToUse) {
+      // Wait briefly for the caller to send the offer after member.joined
+      const t0 = Date.now();
+      while (!offerToUse && (Date.now() - t0) < 4000) {
+        await new Promise(r => setTimeout(r, 120));
+        offerToUse = pendingOffer || window.__PENDING_OFFER || window.__LAST_OFFER || null;
+      }
+    }
     if (offerToUse) {
       await waitTurnReady();
       await getMic();
