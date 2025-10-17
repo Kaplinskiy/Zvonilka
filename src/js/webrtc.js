@@ -3,6 +3,10 @@
 // This script is loaded before a large inline script.
 // test
 (function () {
+  if (typeof window !== 'undefined') {
+    if (window.__WEBRTC_INITED__) { try { console.warn('[WEBRTC] duplicate init, skipping'); } catch {} return; }
+    window.__WEBRTC_INITED__ = true;
+  }
   // RTCPeerConnection instance
   let pc = null;
   // Queue for remote ICE candidates that arrive before remote description is set
@@ -352,7 +356,7 @@
       offerInProgress = true;
       const offer = await pc.createOffer({ offerToReceiveAudio: 1 });
       await pc.setLocalDescription(offer);
-      window.wsSend && window.wsSend('offer', offer);
+      window.wsSend && window.wsSend('offer', { type: 'offer', sdp: offer.sdp });
       offerSent = true;
       window.addLog && window.addLog('signal', 'send offer');
     } catch (e) {
