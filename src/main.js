@@ -390,7 +390,7 @@ function renderLangSwitch(active) {
             await pc.setLocalDescription(offer);
             const payload = { type: 'offer', sdp: offer.sdp, offer: { type: 'offer', sdp: offer.sdp } };
             if (typeof window.wsSend === 'function') window.wsSend('offer', payload);
-            logT('signal', 'send offer');
+            // logT('signal', 'send offer'); // Removed to avoid duplicate "send offer" logs
             logT('webrtc', 'webrtc.offer_sent_caller');
             try { window.__OFFER_SENT__ = true; } catch {}
 
@@ -439,6 +439,22 @@ function renderLangSwitch(active) {
                 // Prefer to apply when local offer is set
                 if (!pc || (st && st.startsWith('have-local-')) || attempts > 10) {
                   await applyAnswer(ans);
+                  // --- Immediate ICE diagnostics and quick nudge after answer ---
+                  try {
+                    const pcDbg = (window.getPC && window.getPC());
+                    try { window.addLog && window.addLog('webrtc', 'sig=' + (pcDbg && pcDbg.signalingState)); } catch {}
+                    try { window.addLog && window.addLog('webrtc', 'ice=' + (pcDbg && pcDbg.iceConnectionState)); } catch {}
+                    try { window.addLog && window.addLog('webrtc', 'state=' + (pcDbg && pcDbg.connectionState)); } catch {}
+                    setTimeout(() => {
+                      try {
+                        const pc2 = (window.getPC && window.getPC());
+                        if (pc2 && pc2.iceConnectionState === 'new') {
+                          window.addLog && window.addLog('webrtc', 'restartIce (still new after answer)');
+                          pc2.restartIce();
+                        }
+                      } catch {}
+                    }, 300);
+                  } catch {}
                   // Flush any last ICE candidates captured by WS hook
                   try {
                     const pc2 = (window.getPC && window.getPC()) || (window.__WEBRTC__ && window.__WEBRTC__.getPC && window.__WEBRTC__.getPC());
