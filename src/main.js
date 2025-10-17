@@ -327,27 +327,23 @@ function renderLangSwitch(active) {
   let pendingOffer = null;
   let offerAttempted = false;
 
-  // Guard duplicate or wrong-role offer attempts: allow only one offer, only in stable state, ignore force param
+  // Guard duplicate or wrong-role offer attempts: wrap only if real impl exists
   (function guardOfferOnce(){
-    const origSend = window.sendOfferIfPossible;
+    const origSendInit = window.sendOfferIfPossible;
+    if (typeof origSendInit !== 'function') {
+      // No real implementation yet; do not override to avoid no-op.
+      return;
+    }
     window.sendOfferIfPossible = async function(){
       // Only caller is allowed to send an offer
-      if (role !== 'caller') { try{ console.debug('[OFFER-GUARD] blocked: not caller'); }catch{}; return; }
+      if (role !== 'caller') { try{ console.debug('[OFFER-GUARD] block:not-caller role=', role); }catch{}; return; }
       const pc = (window.getPC && window.getPC()) || (window.__WEBRTC__ && window.__WEBRTC__.getPC && window.__WEBRTC__.getPC());
       const st = pc && pc.signalingState;
-      if (offerAttempted) { try{ console.debug('[OFFER-GUARD] blocked: already attempted'); }catch{}; return; }
-      if (st && st !== 'stable') { try{ console.debug('[OFFER-GUARD] blocked: signalingState=', st); }catch{}; return; }
-      // call underlying implementation first; set flag only after it returns
-      if (typeof origSend === 'function') {
-        const r = await origSend();
-        offerAttempted = true;
-        return r;
-      }
-      if (typeof window.createAndSendOffer === 'function') {
-        const r = await window.createAndSendOffer();
-        offerAttempted = true;
-        return r;
-      }
+      if (offerAttempted) { try{ console.debug('[OFFER-GUARD] block:already-attempted'); }catch{}; return; }
+      if (st && st !== 'stable') { try{ console.debug('[OFFER-GUARD] block:state=', st); }catch{}; return; }
+      const r = await origSendInit();
+      offerAttempted = true;
+      return r;
     };
   })();
 
@@ -374,9 +370,9 @@ function renderLangSwitch(active) {
             if (role === 'caller') {
               // allow first real offer after peer appears
               offerAttempted = false;
-              // choose implementation from window or __WEBRTC__
-              const sendFn = (window.sendOfferIfPossible)
-                           || (window.__WEBRTC__ && window.__WEBRTC__.sendOfferIfPossible);
+              // choose implementation from __WEBRTC__ first, then window
+              const sendFn = (window.__WEBRTC__ && window.__WEBRTC__.sendOfferIfPossible)
+                           || window.sendOfferIfPossible;
               // wait for PC to exist and be stable before creating offer
               try {
                 const t0 = Date.now();
