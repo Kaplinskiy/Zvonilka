@@ -222,7 +222,7 @@
       negotiationScheduled = true;
       setTimeout(async () => {
         try { await sendOfferIfPossible(); } catch {} finally { negotiationScheduled = false; }
-      }, 50);
+      }, 300);
     };
 
     // Extra diagnostics

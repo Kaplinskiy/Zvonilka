@@ -363,16 +363,14 @@ function renderLangSwitch(active) {
         }
         case 'member.joined': {
           try {
+            // Не отправляем оффер отсюда; пусть webrtc.js решает через onnegotiationneeded
             logT('signal', 'debug.signal_recv_member_joined');
-            if (role === 'caller' && typeof window.sendOfferIfPossible === 'function') {
-              await window.sendOfferIfPossible(); // guarded: only once, only when stable
-            }
           } catch (e) {
             logT('error', 'error.member_joined_handler', { msg: (e?.message || String(e)) });
           }
           break;
         }
-        case 'joined':
+        case 'joined':fix(signal): stop sending offer from member.joined (main.js)
         case 'peer.joined': {
           // Already handled by member.joined; avoid double offer
           logT('signal', 'debug.signal_recv_member_joined');
