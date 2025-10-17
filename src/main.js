@@ -392,6 +392,7 @@ function renderLangSwitch(active) {
             if (typeof window.wsSend === 'function') window.wsSend('offer', payload);
             logT('signal', 'send offer');
             logT('webrtc', 'webrtc.offer_sent_caller');
+            try { window.__OFFER_SENT__ = true; } catch {}
 
           } catch (e) {
             logT('error', 'error.offer_send_failed', { msg: (e?.message || String(e)) });
@@ -554,6 +555,7 @@ function renderLangSwitch(active) {
    * @param {string} reason - Reason for cleanup, for logging.
    */
   function doCleanup(reason = 'user-hangup') {
+    try { window.__OFFER_SENT__ = false; } catch {}
     // Guard: ignore premature peer-bye while PC not established
     // в main.js, в начале doCleanup
     console.debug('[CLEANUP]', reason,
