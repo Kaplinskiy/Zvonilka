@@ -18,6 +18,7 @@
   // Flag indicating whether an offer has been sent to the remote peer
   let offerSent = false;
   let offerInProgress = false;
+  let negotiationScheduled = false;
   // Flag indicating whether the remote description has been applied to the peer connection
   let remoteDescApplied = false;
 
@@ -215,9 +216,13 @@
       window.addLog && window.addLog('webrtc', 'create RTCPeerConnection ' + (cfg.iceTransportPolicy ? `(policy=${cfg.iceTransportPolicy})` : ''));
     } catch {}
     pc = new RTCPeerConnection(cfg);
-    // Ensure offer is created when negotiation is needed
-    pc.onnegotiationneeded = async () => {
-      try { await sendOfferIfPossible(); } catch {}
+    // Ensure offer is created when negotiation is needed (debounced to avoid double fires)
+    pc.onnegotiationneeded = () => {
+      if (negotiationScheduled) return;
+      negotiationScheduled = true;
+      setTimeout(async () => {
+        try { await sendOfferIfPossible(); } catch {} finally { negotiationScheduled = false; }
+      }, 50);
     };
 
     // Extra diagnostics
@@ -350,7 +355,8 @@
       offerInProgress = true;
       const offer = await pc.createOffer({ offerToReceiveAudio: 1 });
       await pc.setLocalDescription(offer);
-      window.wsSend && window.wsSend('offer', { type: 'offer', sdp: offer.sdp });
+      const payload = { type: 'offer', sdp: offer.sdp, offer: { type: 'offer', sdp: offer.sdp } };
+      window.wsSend && window.wsSend('offer', payload);
       offerSent = true;
       window.addLog && window.addLog('signal', 'send offer');
     } catch (e) {
