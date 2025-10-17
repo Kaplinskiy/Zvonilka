@@ -372,12 +372,6 @@ function renderLangSwitch(active) {
           }
           break;
         }
-        case 'joined':
-        case 'peer.joined': {
-          // Already handled by member.joined; avoid double offer
-          logT('signal', 'debug.signal_recv_member_joined');
-          break;
-        }
         case 'offer': {
           logT('signal', 'debug.signal_recv_offer');
           // If we are also a caller, ignore incoming offer to avoid glare
