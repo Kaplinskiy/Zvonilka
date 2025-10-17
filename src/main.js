@@ -367,30 +367,34 @@ function renderLangSwitch(active) {
         case 'member.joined': {
           try {
             logT('signal', 'debug.signal_recv_member_joined');
-            if (role === 'caller') {
-              // allow first real offer after peer appears
-              offerAttempted = false;
-              // choose implementation from __WEBRTC__ first, then window
-              const sendFn = (window.__WEBRTC__ && window.__WEBRTC__.sendOfferIfPossible)
-                           || window.sendOfferIfPossible;
-              // wait for PC to exist and be stable before creating offer
-              try {
-                const t0 = Date.now();
-                while (Date.now() - t0 < 2000) {
-                  const pcw = (window.getPC && window.getPC());
-                  if (pcw && (!pcw.signalingState || pcw.signalingState === 'stable')) break;
-                  await new Promise(r => setTimeout(r, 80));
-                }
-              } catch {}
-              if (typeof sendFn === 'function') {
-                try { console.debug('[OFFER] calling sendOfferIfPossible via', (sendFn === window.sendOfferIfPossible ? 'window' : '__WEBRTC__')); } catch {}
-                await sendFn(); // оффер только после входа второго участника
-              } else {
-                try { console.debug('[OFFER] sendOfferIfPossible not found on window or __WEBRTC__'); } catch {}
+            if (role !== 'caller') { break; }
+
+            // 1) wait for PeerConnection to exist and be stable
+            try {
+              const t0 = Date.now();
+              while (Date.now() - t0 < 2000) {
+                const pcw = (window.getPC && window.getPC());
+                if (pcw && (!pcw.signalingState || pcw.signalingState === 'stable')) break;
+                await new Promise(r => setTimeout(r, 80));
               }
-            }
+            } catch {}
+
+            // 2) ensure TURN and microphone are ready
+            await waitTurnReady();
+            await getMic();
+
+            // 3) create and send SDP offer directly via signaling
+            const pc = (window.getPC && window.getPC());
+            if (!pc) throw new Error('PC not ready');
+            const offer = await pc.createOffer({ offerToReceiveAudio: 1 });
+            await pc.setLocalDescription(offer);
+            const payload = { type: 'offer', sdp: offer.sdp, offer: { type: 'offer', sdp: offer.sdp } };
+            if (typeof window.wsSend === 'function') window.wsSend('offer', payload);
+            logT('signal', 'send offer');
+            logT('webrtc', 'webrtc.offer_sent_caller');
+
           } catch (e) {
-            logT('error', 'error.member_joined_handler', { msg: (e?.message || String(e)) });
+            logT('error', 'error.offer_send_failed', { msg: (e?.message || String(e)) });
           }
           break;
         }
