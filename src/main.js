@@ -370,7 +370,7 @@ function renderLangSwitch(active) {
           }
           break;
         }
-        case 'joined':fix(signal): stop sending offer from member.joined (main.js)
+        case 'joined':
         case 'peer.joined': {
           // Already handled by member.joined; avoid double offer
           logT('signal', 'debug.signal_recv_member_joined');
