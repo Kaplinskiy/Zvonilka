@@ -327,23 +327,6 @@ function renderLangSwitch(active) {
   let pendingOffer = null;
   let offerAttempted = false;
 
-  // Guard duplicate or wrong-role offer attempts: allow only one offer, only in stable state, ignore force param
-  (function guardOfferOnce(){
-    const origSend = window.sendOfferIfPossible;
-    window.sendOfferIfPossible = async function(){
-      // Only caller is allowed to send an offer
-      if (role !== 'caller') { try{ console.debug('[OFFER-GUARD] blocked: not caller'); }catch{}; return; }
-      const pc = (window.getPC && window.getPC()) || (window.__WEBRTC__ && window.__WEBRTC__.getPC && window.__WEBRTC__.getPC());
-      const st = pc && pc.signalingState;
-      if (offerAttempted) { try{ console.debug('[OFFER-GUARD] blocked: already attempted'); }catch{}; return; }
-      if (st && st !== 'stable') { try{ console.debug('[OFFER-GUARD] blocked: signalingState=', st); }catch{}; return; }
-      // mark before calling to protect against concurrent callers
-      offerAttempted = true;
-      if (typeof origSend === 'function') return await origSend();
-      if (typeof window.createAndSendOffer === 'function') return await window.createAndSendOffer();
-    };
-  })();
-
   // --- SIGNALING MESSAGE HANDLER ---
   /**
    * Handle incoming signaling messages and update the app state accordingly.
@@ -362,11 +345,25 @@ function renderLangSwitch(active) {
           break;
         }
         case 'member.joined': {
+          logT('signal', 'debug.signal_recv_member_joined');
+          // IMPORTANT: If we are the initiator (caller), send the offer immediately after the second participant joins.
+          // This was previously done by an inline script; now handled here.
           try {
-            // Не отправляем оффер отсюда; пусть webrtc.js решает через onnegotiationneeded
-            logT('signal', 'debug.signal_recv_member_joined');
+            if (role === 'caller' && !offerAttempted) {
+              if (typeof window.sendOfferIfPossible === 'function') {
+                await window.sendOfferIfPossible(true); // force
+                offerAttempted = true;
+                logT('webrtc', 'webrtc.offer_sent_caller');
+              } else if (typeof window.createAndSendOffer === 'function') {
+                await window.createAndSendOffer();
+                offerAttempted = true;
+                logT('webrtc', 'webrtc.offer_sent_via_helper');
+              } else {
+                logT('warn', 'warn.no_offer_sender_impl');
+              }
+            }
           } catch (e) {
-            logT('error', 'error.member_joined_handler', { msg: (e?.message || String(e)) });
+            logT('error', 'error.offer_send_failed', { msg: (e?.message || String(e)) });
           }
           break;
         }
@@ -378,8 +375,6 @@ function renderLangSwitch(active) {
         }
         case 'offer': {
           logT('signal', 'debug.signal_recv_offer');
-          // If we are also a caller, ignore incoming offer to avoid glare
-          if (role === 'caller') { logT('warn', 'warn.ignore_offer_on_caller'); break; }
           // Normalize {type:'offer', sdp} or legacy {payload|offer}
           const _sdp = msg?.sdp || msg?.payload?.sdp || null;
           pendingOffer = _sdp ? { type: 'offer', sdp: _sdp } : (msg.payload || msg.offer || null);
@@ -574,7 +569,7 @@ function renderLangSwitch(active) {
     if (btnAnswer) btnAnswer.classList.add('hidden');
     if (shareWrap) shareWrap.classList.add('hidden');
     const peerEnded = (reason === 'peer-bye');
-    setStatusKey(peerEnded ? 'call.ended_by_peer' : 'call.ended', peerEnded ? 'ok' : 'warn-txt');
+    setStatusKey('call.ended', peerEnded ? 'ok' : 'warn-txt');
     if (noteEl) noteEl.textContent = '';
     offerAttempted = false;
     role = null; roomId = null;

@@ -3,10 +3,6 @@
 // This script is loaded before a large inline script.
 // test
 (function () {
-  if (typeof window !== 'undefined') {
-    if (window.__WEBRTC_INITED__) { try { console.warn('[WEBRTC] duplicate init, skipping'); } catch {} return; }
-    window.__WEBRTC_INITED__ = true;
-  }
   // RTCPeerConnection instance
   let pc = null;
   // Queue for remote ICE candidates that arrive before remote description is set
@@ -17,8 +13,6 @@
   let pendingOffer = null;
   // Flag indicating whether an offer has been sent to the remote peer
   let offerSent = false;
-  let offerInProgress = false;
-  let negotiationScheduled = false;
   // Flag indicating whether the remote description has been applied to the peer connection
   let remoteDescApplied = false;
 
@@ -216,13 +210,9 @@
       window.addLog && window.addLog('webrtc', 'create RTCPeerConnection ' + (cfg.iceTransportPolicy ? `(policy=${cfg.iceTransportPolicy})` : ''));
     } catch {}
     pc = new RTCPeerConnection(cfg);
-    // Ensure offer is created when negotiation is needed (debounced to avoid double fires)
-    pc.onnegotiationneeded = () => {
-      if (negotiationScheduled) return;
-      negotiationScheduled = true;
-      setTimeout(async () => {
-        try { await sendOfferIfPossible(); } catch {} finally { negotiationScheduled = false; }
-      }, 300);
+    // Ensure offer is created when negotiation is needed
+    pc.onnegotiationneeded = async () => {
+      try { await sendOfferIfPossible(); } catch {}
     };
 
     // Extra diagnostics
@@ -316,25 +306,27 @@
       if (onTrackCb) onTrackCb(e.streams[0]);
     };
 
-    // Ensure a stable transceiver order to keep m-lines consistent: exactly one audio transceiver
+    // Ensure a stable transceiver order to keep m-lines consistent
     try {
       const tx = pc.getTransceivers ? pc.getTransceivers() : [];
       if (!tx || tx.length === 0) {
         pc.addTransceiver('audio', { direction: 'sendrecv' });
-      } else if (tx.length > 1) {
-        // do not add more, rely on single audio m-line
       }
     } catch {}
 
-    // Add all local media tracks, avoiding duplicates for the same kind
+    // Add all local media tracks to the peer connection for sending to remote peer
     if (localStream) {
-      const senders = pc.getSenders ? pc.getSenders() : [];
       for (const track of localStream.getTracks()) {
-        const hasSameKind = senders.some(s => s.track && s.track.kind === track.kind);
-        if (!hasSameKind) pc.addTrack(track, localStream);
+        pc.addTrack(track, localStream);
       }
     }
-
+    // Proactively trigger offer if WS is already open and we have mic
+    try {
+      if (typeof window.isWSOpen === 'function' && window.isWSOpen() && localStream) {
+        // fire-and-forget; do not await inside non-async function
+        sendOfferIfPossible().catch(()=>{});
+      }
+    } catch {}
     return pc;
   }
 
@@ -348,23 +340,17 @@
     try {
       if (!(window.isWSOpen && window.isWSOpen())) return;
       if (!pc || !localStream) return;
-      if (offerSent || offerInProgress) return;
+      // allow only when stable and not already sent
       const st = pc.signalingState;
+      if (offerSent) return;
       if (st && st !== 'stable') return;
-      // mutex to avoid concurrent createOffer
-      offerInProgress = true;
-      const offer = await pc.createOffer({ offerToReceiveAudio: 1 });
+      const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      const payload = { type: 'offer', sdp: offer.sdp, offer: { type: 'offer', sdp: offer.sdp } };
-      window.wsSend && window.wsSend('offer', payload);
+      window.wsSend && window.wsSend('offer', offer);
       offerSent = true;
       window.addLog && window.addLog('signal', 'send offer');
     } catch (e) {
-      // allow retry on next negotiation
-      offerSent = false;
       window.addLog && window.addLog('error', 'sendOfferIfPossible: ' + (e.message || e));
-    } finally {
-      offerInProgress = false;
     }
   }
 
