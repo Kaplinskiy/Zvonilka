@@ -363,8 +363,10 @@ function renderLangSwitch(active) {
         }
         case 'member.joined': {
           try {
-            // Не отправляем оффер отсюда; пусть webrtc.js решает через onnegotiationneeded
             logT('signal', 'debug.signal_recv_member_joined');
+            if (role === 'caller' && typeof window.sendOfferIfPossible === 'function') {
+              await window.sendOfferIfPossible(); // оффер только после входа второго участника
+            }
           } catch (e) {
             logT('error', 'error.member_joined_handler', { msg: (e?.message || String(e)) });
           }
@@ -383,6 +385,7 @@ function renderLangSwitch(active) {
           // Normalize {type:'offer', sdp} or legacy {payload|offer}
           const _sdp = msg?.sdp || msg?.payload?.sdp || null;
           pendingOffer = _sdp ? { type: 'offer', sdp: _sdp } : (msg.payload || msg.offer || null);
+          window.__PENDING_OFFER = pendingOffer;
           window.__LAST_OFFER = pendingOffer; // debug: allow manual accept from console
           // Always show the Answer button; do NOT auto-accept to avoid races
           if (btnAnswer) btnAnswer.classList.remove('hidden');
@@ -647,7 +650,7 @@ function renderLangSwitch(active) {
     if (!isWSOpen()) await connectWS('callee', roomId, onSignal);
     else logT('warn', 'warn.ws_already_connected_callee');
 
-    const offerToUse = pendingOffer || window.__LAST_OFFER || null;
+    const offerToUse = pendingOffer || window.__PENDING_OFFER || window.__LAST_OFFER || null;
     if (offerToUse) {
       await waitTurnReady();
       await getMic();
