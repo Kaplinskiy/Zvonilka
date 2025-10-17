@@ -362,25 +362,11 @@ function renderLangSwitch(active) {
           break;
         }
         case 'member.joined': {
-          logT('signal', 'debug.signal_recv_member_joined');
-          // IMPORTANT: If we are the initiator (caller), send the offer immediately after the second participant joins.
-          // This was previously done by an inline script; now handled here.
           try {
-            if (role === 'caller' && !offerAttempted) {
-              if (typeof window.sendOfferIfPossible === 'function') {
-                await window.sendOfferIfPossible();
-                offerAttempted = true;
-                logT('webrtc', 'webrtc.offer_sent_caller');
-              } else if (typeof window.createAndSendOffer === 'function') {
-                await window.createAndSendOffer();
-                offerAttempted = true;
-                logT('webrtc', 'webrtc.offer_sent_via_helper');
-              } else {
-                logT('warn', 'warn.no_offer_sender_impl');
-              }
-            }
+            // Не отправляем оффер из main.js — это делает webrtc.js через onnegotiationneeded.
+            logT('signal', 'debug.signal_recv_member_joined');
           } catch (e) {
-            logT('error', 'error.offer_send_failed', { msg: (e?.message || String(e)) });
+            logT('error', 'error.member_joined_handler', { msg: (e?.message || String(e)) });
           }
           break;
         }
