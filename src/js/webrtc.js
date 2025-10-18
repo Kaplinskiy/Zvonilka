@@ -64,6 +64,23 @@
     });
   }
 
+  // Ensure there is an active audio sender attached to the PC
+  async function ensureAudioSender(pc, stream) {
+    if (!pc || !stream) return;
+    const atr = stream.getAudioTracks && stream.getAudioTracks()[0];
+    if (!atr) return;
+    // If there is already an audio sender, replace its track
+    const ex = pc.getSenders ? pc.getSenders().find(x => x.track && x.track.kind === 'audio') : null;
+    if (ex) { try { await ex.replaceTrack(atr); } catch {} return; }
+    // Guarantee a sendrecv transceiver and add track
+    try {
+      const tx = pc.getTransceivers && pc.getTransceivers()[0];
+      if (!tx) pc.addTransceiver('audio', { direction: 'sendrecv' });
+      else if (tx.direction && tx.direction !== 'sendrecv') tx.direction = 'sendrecv';
+    } catch {}
+    try { pc.addTrack(atr, stream); } catch {}
+  }
+
   function __getRole(){
     try {
       const fromUrl = new URLSearchParams(location.search).get('role');
@@ -438,6 +455,9 @@
       if (st && st !== 'stable') return;
       // mutex to avoid concurrent createOffer
       offerInProgress = true;
+      // Guarantee mic and sender before offer
+      if (!localStream) { try { localStream = await getMic(); } catch {} }
+      await ensureAudioSender(pc, localStream);
       const offer = await pc.createOffer({ offerToReceiveAudio: 1 });
       await pc.setLocalDescription(offer);
       await waitIceComplete(pc, 2500);
@@ -484,20 +504,9 @@
       if (sdpStr) pendingOffer = { type: 'offer', sdp: sdpStr };
       if (!pc) createPC(onTrackCb);
       await pc.setRemoteDescription(new RTCSessionDescription(pendingOffer));
-      // Ensure callee sends audio: capture mic and attach if not already attached
-      if (!localStream) {
-        try { localStream = await getMic(); } catch {}
-      }
-      try {
-        if (localStream) {
-          const senders = pc.getSenders ? pc.getSenders() : [];
-          const hasAudio = senders.some(s => s.track && s.track.kind === 'audio');
-          if (!hasAudio) {
-            const atr = localStream.getAudioTracks && localStream.getAudioTracks()[0];
-            if (atr) pc.addTrack(atr, localStream);
-          }
-        }
-      } catch {}
+      // Ensure callee sends audio
+      if (!localStream) { try { localStream = await getMic(); } catch {} }
+      await ensureAudioSender(pc, localStream);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       await waitIceComplete(pc, 2500);
