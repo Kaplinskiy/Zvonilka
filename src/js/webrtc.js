@@ -193,7 +193,7 @@
         window.addLog && window.addLog('webrtc', 'ICE servers: ' + flat.join(', '));
       } catch {}
       // Allow all transports during diagnosis; TURN is still preferred via urls
-      if (t.forceRelay || isMobile) cfg.iceTransportPolicy = 'relay';
+      if (t.forceRelay || isMobile) cfg.iceTransportPolicy = 'all';
       // Log ICE config before returning
       console.log('[ICE CONFIG DEBUG]', JSON.stringify(cfg, null, 2));
       return cfg;
