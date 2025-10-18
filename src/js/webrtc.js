@@ -68,7 +68,7 @@
   async function ensureAudioSender(pc, stream) {
     if (!pc || !stream) return;
     const atr = stream.getAudioTracks && stream.getAudioTracks()[0];
-    if (!atr) return;
+    if (!atr) return; atr.enabled = true;
     // If there is already an audio sender, replace its track
     const ex = pc.getSenders ? pc.getSenders().find(x => x.track && x.track.kind === 'audio') : null;
     if (ex) { try { await ex.replaceTrack(atr); } catch {} return; }
@@ -79,6 +79,16 @@
       else if (tx.direction && tx.direction !== 'sendrecv') tx.direction = 'sendrecv';
     } catch {}
     try { pc.addTrack(atr, stream); } catch {}
+    // Diagnostics: confirm sender presence and parameters
+    try {
+      const snd = pc.getSenders && pc.getSenders().find(x => x.track && x.track.kind === 'audio');
+      const params = snd && snd.getParameters ? await snd.getParameters() : null;
+      window.addLog && window.addLog('webrtc', 'sender ready ' + JSON.stringify({
+        hasSender: !!snd,
+        enabled: atr.enabled === true,
+        encodings: params && params.encodings ? params.encodings.length : 0
+      }));
+    } catch {}
   }
 
   function __getRole(){
