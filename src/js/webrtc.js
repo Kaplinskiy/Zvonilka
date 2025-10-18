@@ -358,9 +358,18 @@
         }
     };
 
-    // When a remote media track is received, invoke the provided callback with the stream
+    // When a remote media track is received, invoke the provided callback and auto-bind to audio element
     pc.ontrack = (e) => {
-      if (onTrackCb) onTrackCb(e.streams[0]);
+      const stream = e.streams && e.streams[0] ? e.streams[0] : null;
+      if (onTrackCb && stream) onTrackCb(stream);
+      try {
+        const a = document.querySelector('#remoteAudio') || document.querySelector('audio');
+        if (a && stream) {
+          a.muted = false;
+          a.srcObject = stream;
+          a.play().catch(() => {});
+        }
+      } catch {}
     };
 
     // Ensure a stable transceiver order to keep m-lines consistent: exactly one audio transceiver
