@@ -384,7 +384,8 @@
 
     // When a remote media track is received, invoke the provided callback and auto-bind to audio element
     pc.ontrack = (e) => {
-      const stream = e.streams && e.streams[0] ? e.streams[0] : null;
+      // Build a stream even if e.streams is empty (fallback to e.track)
+      const stream = (e.streams && e.streams[0]) ? e.streams[0] : (e.track ? new MediaStream([e.track]) : null);
       if (onTrackCb && stream) onTrackCb(stream);
       try { window.addLog && window.addLog('webrtc', 'webrtc.remote_track'); } catch {}
       try {
