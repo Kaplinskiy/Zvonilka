@@ -484,6 +484,20 @@
       if (sdpStr) pendingOffer = { type: 'offer', sdp: sdpStr };
       if (!pc) createPC(onTrackCb);
       await pc.setRemoteDescription(new RTCSessionDescription(pendingOffer));
+      // Ensure callee sends audio: capture mic and attach if not already attached
+      if (!localStream) {
+        try { localStream = await getMic(); } catch {}
+      }
+      try {
+        if (localStream) {
+          const senders = pc.getSenders ? pc.getSenders() : [];
+          const hasAudio = senders.some(s => s.track && s.track.kind === 'audio');
+          if (!hasAudio) {
+            const atr = localStream.getAudioTracks && localStream.getAudioTracks()[0];
+            if (atr) pc.addTrack(atr, localStream);
+          }
+        }
+      } catch {}
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       await waitIceComplete(pc, 2500);
