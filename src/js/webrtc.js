@@ -63,13 +63,27 @@
     if (!pc.remoteDescription) { window.__REMOTE_ICE_Q.push(c); return; }
     // Normalize candidate shape: allow raw string and missing mid/index
     let init = c;
+    // Explicitly handle end-of-candidates
+    if (init === null || init === false) { try { await pc.addIceCandidate(null); } catch {}; return; }
     if (typeof init === 'string') init = { candidate: init };
-    if (init && typeof init === 'object' && init.candidate && !('sdpMid' in init) && !('sdpMLineIndex' in init)) {
-      try {
-        const tx = pc.getTransceivers && pc.getTransceivers()[0];
-        const mid = (tx && tx.mid) || (pc.currentRemoteDescription && pc.currentRemoteDescription.sdp && '0') || '0';
-        init = { ...init, sdpMid: mid };
-      } catch {}
+    // Extended m-line normalization
+    if (init && typeof init === 'object' && init.candidate) {
+      const noMid = !('sdpMid' in init) || init.sdpMid == null;
+      const noIdx = !('sdpMLineIndex' in init) || init.sdpMLineIndex == null;
+      if (noMid && noIdx) {
+        try {
+          const tx = pc.getTransceivers && pc.getTransceivers()[0];
+          const mid = (tx && tx.mid) || '0';
+          init = { ...init, sdpMid: mid, sdpMLineIndex: 0 };
+        } catch { init = { ...init, sdpMid: '0', sdpMLineIndex: 0 }; }
+      } else if (noMid) {
+        try {
+          const tx = pc.getTransceivers && pc.getTransceivers()[0];
+          init = { ...init, sdpMid: (tx && tx.mid) || '0' };
+        } catch { init = { ...init, sdpMid: '0' }; }
+      } else if (noIdx) {
+        init = { ...init, sdpMLineIndex: 0 };
+      }
     }
     try { await pc.addIceCandidate(init); } catch {}
   }
@@ -94,7 +108,7 @@
     try {
       if (Array.isArray(window.__REMOTE_ICE_Q) && window.__REMOTE_ICE_Q.length) {
         for (const c of window.__REMOTE_ICE_Q.splice(0)) {
-          try { await pc.addIceCandidate(c); } catch {}
+          try { await addRemoteIce(c); } catch {}
         }
       }
     } catch {}
