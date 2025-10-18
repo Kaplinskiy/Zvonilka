@@ -225,16 +225,19 @@
       window.addLog && window.addLog('webrtc', 'create RTCPeerConnection ' + (cfg.iceTransportPolicy ? `(policy=${cfg.iceTransportPolicy})` : ''));
     } catch {}
     pc = new RTCPeerConnection(cfg);
+        // Ensure offer is created when negotiation is needed
+
+    };
     // Ensure offer is created when negotiation is needed (debounced to avoid double fires)
-    pc.onnegotiationneeded = () => {
+    pc.onnegotiationneeded = async () => {
       const r = __getRole();
-      if (r !== 'caller') return; // only caller initiates offer
-      if (typeof window !== 'undefined' && window.__OFFER_SENT__) return;
-      if (negotiationScheduled) return;
-      negotiationScheduled = true;
-      setTimeout(async () => {
-        try { await sendOfferIfPossible(); } catch {} finally { negotiationScheduled = false; }
-      }, 300);
+      //if (r !== 'caller') return; // only caller initiates offer
+      //if (typeof window !== 'undefined' && window.__OFFER_SENT__) return;
+      //if (negotiationScheduled) return;
+      //negotiationScheduled = true;
+      //setTimeout(async () => {
+        try { await sendOfferIfPossible(); } catch {} //finally { negotiationScheduled = false; }
+      //}, 300);
     };
 
     // Extra diagnostics
