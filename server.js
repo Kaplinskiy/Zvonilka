@@ -88,6 +88,9 @@ const server = http.createServer(app);
 
 // In-memory room storage: maps roomId to a Set of WebSocket clients connected to that room.
 const rooms = new Map();
+// Track peers per role and buffer ICE when the peer is not yet available
+const roomPeers = new Map(); // roomId -> { caller: WebSocket|null, callee: WebSocket|null }
+const iceBuffers = new Map(); // roomId -> { toCaller: [], toCallee: [] }
 
 // Add a WebSocket client to a room; create the room if it doesn't exist.
 // Assigns a private _roomId property to the WebSocket for easy reference.
@@ -96,6 +99,12 @@ function addToRoom(roomId, ws) {
   rooms.get(roomId).add(ws);
   ws._roomId = roomId; // internal property to track the room
 }
+
+function ensureRoomStruct(roomId) {
+  if (!roomPeers.has(roomId)) roomPeers.set(roomId, { caller: null, callee: null });
+  if (!iceBuffers.has(roomId)) iceBuffers.set(roomId, { toCaller: [], toCallee: [] });
+}
+function otherRole(role) { return role === 'caller' ? 'callee' : 'caller'; }
 
 // Remove a WebSocket client from its room; if room becomes empty, delete it.
 function removeFromRoom(ws) {
@@ -150,6 +159,20 @@ wss.on('connection', (ws) => {
       return;
     }
     addToRoom(roomId, ws);
+
+    ensureRoomStruct(roomId);
+    if (role === 'caller' || role === 'callee') {
+      roomPeers.get(roomId)[role] = ws;
+      // Flush buffered ICE for this role (messages destined "toCaller" or "toCallee")
+      const buf = iceBuffers.get(roomId);
+      const key = role === 'caller' ? 'toCaller' : 'toCallee';
+      const list = buf[key];
+      if (Array.isArray(list) && list.length) {
+        for (const m of list.splice(0)) {
+          try { ws.send(JSON.stringify(m)); } catch {}
+        }
+      }
+    }
 
     // Send a welcome message with a unique memberId to the connecting client.
     ws.send(JSON.stringify({ type: 'hello', memberId: Math.random().toString(36).slice(2) }));
@@ -236,11 +259,27 @@ wss.on('connection', (ws) => {
           }
         }
       }
-
       if (msg?.type) {
         console.log(`[SIGNAL OUT] ${roomId}`, msg.type);
       }
-      broadcast(roomId, msg, ws);
+      // Directed routing for ICE to the opposite role with buffering
+      if (msg && msg.type === 'ice') {
+        const srcRole = (ws._query && ws._query.role) || 'unknown';
+        const dstRole = otherRole(srcRole);
+        ensureRoomStruct(roomId);
+        const peer = roomPeers.get(roomId)[dstRole];
+        const payload = JSON.stringify(msg);
+        if (peer && peer.readyState === WebSocket.OPEN) {
+          try { peer.send(payload); } catch {}
+        } else {
+          const buf = iceBuffers.get(roomId);
+          const key = dstRole === 'caller' ? 'toCaller' : 'toCallee';
+          buf[key].push(msg);
+        }
+      } else {
+        // Non-ICE messages: keep broadcast to all except sender
+        broadcast(roomId, msg, ws);
+      }
     });
 
     ws.on('close', () => {
@@ -248,6 +287,12 @@ wss.on('connection', (ws) => {
       // Notify remaining clients in the room that a peer has left.
       broadcast(roomId, { type: 'bye', reason: 'peer-left' }, ws);
       removeFromRoom(ws);
+      try {
+        const { roomId: rid, role: r } = ws._query || {};
+        if (rid && (r === 'caller' || r === 'callee') && roomPeers.has(rid)) {
+          if (roomPeers.get(rid)[r] === ws) roomPeers.get(rid)[r] = null;
+        }
+      } catch {}
     });
     ws.on('error', () => {
       console.error(`[WS ERROR] ${roomId}`);
