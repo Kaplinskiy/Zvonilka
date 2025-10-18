@@ -20,6 +20,30 @@
   let offerInProgress = false;
   let negotiationScheduled = false;
 
+  // Ensure there is an <audio> sink and a one-time gesture to resume playback
+  function ensureRemoteAudioEl(){
+    let a = document.querySelector('#remoteAudio') || document.querySelector('audio');
+    if (!a) {
+      a = document.createElement('audio');
+      a.id = 'remoteAudio';
+      a.autoplay = true;
+      a.playsInline = true;
+      a.muted = false;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+    }
+    // one-time resume on user gesture
+    if (!window.__AUDIO_RESUME_BOUND__) {
+      window.__AUDIO_RESUME_BOUND__ = true;
+      const resume = () => {
+        try { const el = document.querySelector('#remoteAudio') || document.querySelector('audio'); el && el.play && el.play().catch(()=>{}); } catch {}
+        window.removeEventListener('click', resume, { capture: true });
+      };
+      window.addEventListener('click', resume, { capture: true, once: true });
+    }
+    return a;
+  }
+
   // Feature flag: send full SDP only after ICE gathering completes
   const NON_TRICKLE = true; // send full SDP only after ICE gathering completes
   // Await ICE gathering completion for a given RTCPeerConnection
@@ -362,12 +386,13 @@
     pc.ontrack = (e) => {
       const stream = e.streams && e.streams[0] ? e.streams[0] : null;
       if (onTrackCb && stream) onTrackCb(stream);
+      try { window.addLog && window.addLog('webrtc', 'webrtc.remote_track'); } catch {}
       try {
-        const a = document.querySelector('#remoteAudio') || document.querySelector('audio');
+        const a = ensureRemoteAudioEl();
         if (a && stream) {
           a.muted = false;
           a.srcObject = stream;
-          a.play().catch(() => {});
+          a.play().catch(()=>{});
         }
       } catch {}
     };
