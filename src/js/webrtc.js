@@ -20,6 +20,26 @@
   let offerInProgress = false;
   let negotiationScheduled = false;
 
+  // Feature flag: send full SDP only after ICE gathering completes
+  const NON_TRICKLE = true; // send full SDP only after ICE gathering completes
+  // Await ICE gathering completion for a given RTCPeerConnection
+  async function waitIceComplete(pc, timeoutMs = 2000) {
+    return new Promise((resolve) => {
+      try {
+        if (!pc) return resolve();
+        if (pc.iceGatheringState === 'complete') return resolve();
+        const t0 = Date.now();
+        const tick = () => {
+          if (!pc) return resolve();
+          if (pc.iceGatheringState === 'complete') return resolve();
+          if (Date.now() - t0 >= timeoutMs) return resolve();
+          setTimeout(tick, 60);
+        };
+        tick();
+      } catch { resolve(); }
+    });
+  }
+
   function __getRole(){
     try {
       const fromUrl = new URLSearchParams(location.search).get('role');
@@ -279,11 +299,12 @@
     pc.onicecandidate = (e) => {
       if (e.candidate) {
         try { window.addLog && window.addLog('signal', 'send ice'); } catch {}
+        if (NON_TRICKLE) return; // do not trickle; we'll send full SDP later
         const init = e.candidate && e.candidate.toJSON ? e.candidate.toJSON() : e.candidate;
         window.wsSend && window.wsSend('ice', init);
       } else {
         try { window.addLog && window.addLog('webrtc', 'ice end'); } catch {}
-        window.wsSend && window.wsSend('ice', null); // end-of-candidates
+        if (!NON_TRICKLE) window.wsSend && window.wsSend('ice', null); // end-of-candidates for trickle path
       }
     };
 
@@ -384,7 +405,9 @@
       offerInProgress = true;
       const offer = await pc.createOffer({ offerToReceiveAudio: 1 });
       await pc.setLocalDescription(offer);
-      const payload = { type: 'offer', sdp: offer.sdp, offer: { type: 'offer', sdp: offer.sdp } };
+      await waitIceComplete(pc, 2500);
+      const finalOffer = pc.localDescription || offer;
+      const payload = { type: 'offer', sdp: finalOffer.sdp, offer: { type: 'offer', sdp: finalOffer.sdp } };
       window.wsSend && window.wsSend('offer', payload);
       offerSent = true;
       try { if (typeof window !== 'undefined') window.__OFFER_SENT__ = true; } catch {}
@@ -428,7 +451,9 @@
       await pc.setRemoteDescription(new RTCSessionDescription(pendingOffer));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      window.wsSend && window.wsSend('answer', answer);
+      await waitIceComplete(pc, 2500);
+      const finalAnswer = pc.localDescription || answer;
+      window.wsSend && window.wsSend('answer', finalAnswer);
       remoteDescApplied = true;
       // Flush queued ICE that arrived before remote description was set
       if (Array.isArray(window.__REMOTE_ICE_Q) && window.__REMOTE_ICE_Q.length) {
