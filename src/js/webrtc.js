@@ -225,21 +225,17 @@
       window.addLog && window.addLog('webrtc', 'create RTCPeerConnection ' + (cfg.iceTransportPolicy ? `(policy=${cfg.iceTransportPolicy})` : ''));
     } catch {}
     pc = new RTCPeerConnection(cfg);
-        // Ensure offer is created when negotiation is needed
-    pc.onnegotiationneeded = async () => {
-      try { await sendOfferIfPossible(true); } catch {}
-    };
     // Ensure offer is created when negotiation is needed (debounced to avoid double fires)
-    //pc.onnegotiationneeded = () => {
-    //  const r = __getRole();
-    //  if (r !== 'caller') return; // only caller initiates offer
-     // if (typeof window !== 'undefined' && window.__OFFER_SENT__) return;
-     // if (negotiationScheduled) return;
-    //  negotiationScheduled = true;
-    //  setTimeout(async () => {
-     //   try { await sendOfferIfPossible(); } catch {} finally { negotiationScheduled = false; }
-    //  }, 300);
-    //};
+    pc.onnegotiationneeded = () => {
+      const r = __getRole();
+      if (r !== 'caller') return; // only caller initiates offer
+      if (typeof window !== 'undefined' && window.__OFFER_SENT__) return;
+      if (negotiationScheduled) return;
+      negotiationScheduled = true;
+      setTimeout(async () => {
+        try { await sendOfferIfPossible(); } catch {} finally { negotiationScheduled = false; }
+      }, 300);
+    };
 
     // Extra diagnostics
     pc.onicecandidateerror = (e) => {
@@ -350,13 +346,7 @@
         if (!hasSameKind) pc.addTrack(track, localStream);
       }
     }
-        // Proactively trigger offer if WS is already open and we have mic
-    try {
-      if (typeof window.isWSOpen === 'function' && window.isWSOpen() && localStream) {
-                // fire-and-forget; do not await inside non-async function
-        sendOfferIfPossible(true).catch(()=>{});
-      }
-    } catch {}
+
     return pc;
   }
 
