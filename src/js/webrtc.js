@@ -236,6 +236,19 @@
           out.add(rebuilt);
         });
         s.urls = Array.from(out).filter(u => !!u && /^turns?:/i.test(u));
+        // If forceRelay requested, prefer TCP-only TURN to avoid UDP blocks
+        if (t.forceRelay) {
+          const tcpOnly = s.urls.filter(u => /^turns:/i.test(u) && /transport=tcp/i.test(u));
+          if (tcpOnly.length) s.urls = tcpOnly;
+          // If no explicit tcp URL present, synthesize one from the first host
+          if (!s.urls.length) {
+            try {
+              const first = (Array.isArray(list) ? list : [list]).find(Boolean) || '';
+              const host = String(first).replace(/^turns?:\/{0,2}/i, '').split('?')[0].split(':')[0];
+              if (host) s.urls = [`turns:${host}:443?transport=tcp`];
+            } catch {}
+          }
+        }
         return s;
       });
       const cfg = { iceServers: norm };
