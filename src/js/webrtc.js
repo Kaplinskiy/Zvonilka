@@ -194,7 +194,9 @@
    */
   async function getMic() {
     try {
-      localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      localStream = await navigator.mediaDevices.getUserMedia({
+        audio: { noiseSuppression: true, echoCancellation: true, autoGainControl: true, channelCount: 1 }
+      });
       if (window.addLog) window.addLog('info', 'mic ok');
       return localStream;
     } catch (e) {
@@ -326,12 +328,21 @@
     // Ensure offer is created when negotiation is needed (debounced to avoid double fires)
     pc.onnegotiationneeded = () => {
       const r = __getRole();
-      if (r !== 'caller') return; // only caller initiates offer
+      // If callee needs to start sending media later, ask caller to re-offer
+      if (r === 'layee' /* typo guard fix */) {}
+      if (r === 'callee') {
+        try { window.addLog && window.addLog('signal', 'send renegotiate'); } catch {}
+        if (typeof window.ws !== 'undefined' && typeof window.wsSend === 'function') {
+          try { window.wsSend('renegotiate', { reason: 'track-or-direction-change' }); } catch {}
+        }
+        return; // callee does not call createOffer directly
+      }
+      // Caller path: debounce + single-offer guard
       if (typeof window !== 'undefined' && window.__OFFER_SENT__) return;
       if (negotiationScheduled) return;
       negotiationScheduled = true;
       setTimeout(async () => {
-        try { await sendOfferIfPossible(); } catch {} finally { negotiationScheduled = false; }
+        try { await sendOfferIfPossible(); } catch (e) { /* swallow */ } finally { negotiationScheduled = false; }
       }, 300);
     };
 

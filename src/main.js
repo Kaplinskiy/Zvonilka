@@ -374,9 +374,10 @@ function renderLangSwitch(active) {
         case 'member.joined': {
           try {
             logT('signal', 'debug.signal_recv_member_joined');
-            if (role !== 'caller') { break; }
-
-            // 1) wait for PeerConnection to exist and be stable
+            if (typeof role === 'string' && role !== 'caller') { break; }
+            // Ensure TURN + mic + stable PC, then delegate to offer helper
+            await waitTurnReady();
+            await getMic();
             try {
               const t0 = Date.now();
               while (Date.now() - t0 < 2000) {
@@ -385,22 +386,25 @@ function renderLangSwitch(active) {
                 await new Promise(r => setTimeout(r, 80));
               }
             } catch {}
-
-            // 2) ensure TURN and microphone are ready
-            await waitTurnReady();
-            await getMic();
-
-            // 3) create and send SDP offer directly via signaling
-            const pc = (window.getPC && window.getPC());
-            if (!pc) throw new Error('PC not ready');
-            const offer = await pc.createOffer({ offerToReceiveAudio: 1 });
-            await pc.setLocalDescription(offer);
-            const payload = { type: 'offer', sdp: offer.sdp, offer: { type: 'offer', sdp: offer.sdp } };
-            if (typeof window.wsSend === 'function') window.wsSend('offer', payload);
-            // logT('signal', 'send offer'); // Removed to avoid duplicate "send offer" logs
-            logT('webrtc', 'webrtc.offer_sent_caller');
-            try { window.__OFFER_SENT__ = true; } catch {}
-
+            try { window.__OFFER_SENT__ = false; } catch {}
+            offerAttempted = false;
+            if (typeof window.sendOfferIfNeededAfterStable === 'function') {
+              await window.sendOfferIfNeededAfterStable();
+              logT('webrtc', 'webrtc.offer_sent_caller');
+            } else if (typeof window.sendOfferIfPossible === 'function') {
+              await window.sendOfferIfPossible();
+              logT('webrtc', 'webrtc.offer_sent_caller');
+            } else {
+              // Fallback: direct offer
+              const pc = (window.getPC && window.getPC());
+              if (!pc) throw new Error('PC not ready');
+              const offer = await pc.createOffer({ offerToReceiveAudio: 1 });
+              await pc.setLocalDescription(offer);
+              const payload = { type: 'offer', sdp: offer.sdp, offer: { type: 'offer', sdp: offer.sdp } };
+              if (typeof window.wsSend === 'function') window.wsSend('offer', payload);
+              logT('webrtc', 'webrtc.offer_sent_caller');
+              try { window.__OFFER_SENT__ = true; } catch {}
+            }
           } catch (e) {
             logT('error', 'error.offer_send_failed', { msg: (e?.message || String(e)) });
           }
@@ -488,6 +492,45 @@ function renderLangSwitch(active) {
               return false;
             };
             await tryApply();
+          }
+          break;
+        }
+        case 'renegotiate': {
+          try {
+            logT('signal', 'debug.signal_recv_renegotiate');
+            if (role !== 'caller') { break; }
+            await waitTurnReady();
+            await getMic();
+            // ensure we can send a new offer
+            try { window.__OFFER_SENT__ = false; } catch {}
+            offerAttempted = false;
+            // ensure PC is stable before offering
+            try {
+              const t0 = Date.now();
+              while (Date.now() - t0 < 2000) {
+                const pcw = (window.getPC && window.getPC());
+                if (pcw && (!pcw.signalingState || pcw.signalingState === 'stable')) break;
+                await new Promise(r => setTimeout(r, 80));
+              }
+            } catch {}
+            if (typeof window.sendOfferIfNeededAfterStable === 'function') {
+              await window.sendOfferIfNeededAfterStable();
+              logT('webrtc', 'webrtc.offer_sent_caller');
+            } else if (typeof window.sendOfferIfPossible === 'function') {
+              await window.sendOfferIfPossible();
+              logT('webrtc', 'webrtc.offer_sent_caller');
+            } else {
+              const pc = (window.getPC && window.getPC());
+              if (!pc) break;
+              const offer = await pc.createOffer({ offerToReceiveAudio: 1 });
+              await pc.setLocalDescription(offer);
+              const payload = { type: 'offer', sdp: offer.sdp, offer: { type: 'offer', sdp: offer.sdp } };
+              if (typeof window.wsSend === 'function') window.wsSend('offer', payload);
+              logT('webrtc', 'webrtc.offer_sent_caller');
+              try { window.__OFFER_SENT__ = true; } catch {}
+            }
+          } catch (e) {
+            logT('error', 'error.offer_send_failed', { msg: (e?.message || String(e)) });
           }
           break;
         }
