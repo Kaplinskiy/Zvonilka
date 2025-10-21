@@ -5,7 +5,7 @@
 window.__APP_CONFIG__ = {
   SERVER_URL: 'https://call.zababba.com/signal/create',
   WS_URL: 'wss://call.zababba.com/ws',
-  TURN_URL: 'turn:turn.zababba.com:443?transport=tcp'
+  TURN_URL: 'turns:turn.zababba.com:443?transport=tcp'
 };
 
 // Guard flags to avoid repeated loads and updates during active calls
@@ -27,7 +27,7 @@ async function loadTurnConfig() {
     } catch {}
 
     // Skip if already loading
-    if (window.__TURN_LOADING) return; 
+    if (window.__TURN_LOADING) return;
     window.__TURN_LOADING = true;
 
     // no-cache to avoid stale creds
@@ -39,8 +39,7 @@ async function loadTurnConfig() {
     const ttlSec = Number(data.ttl || 0);
     const expiresAt = data.expires ? Date.parse(data.expires) : (ttlSec > 0 ? Date.now() + ttlSec * 1000 : 0);
 
-    // Нормализуем iceServers: превращаем urls в массив и добавляем transport=tcp для TURN(S),
-    // а также гарантируем наличие UDP-вариантов как запасного плана.
+    // Нормализуем iceServers: оставляем ТОЛЬКО TLS/TCP (без UDP), так как relay по UDP блокируется у провайдеров.
     const iceServers = (Array.isArray(data.iceServers) ? data.iceServers : [])
       .map(s => ({ ...s }))
       .map(s => {
@@ -54,10 +53,7 @@ async function loadTurnConfig() {
 
           // Правильные ICE URI без дублирования схемы
           const withTcp = `turns:${hostOnly}:443?transport=tcp`;
-          const withUdp = `turn:${hostOnly}:3478?transport=udp`;
-
           norm.add(withTcp);
-          norm.add(withUdp);
         }
         return {
           urls: Array.from(norm),
@@ -69,7 +65,7 @@ async function loadTurnConfig() {
 
     // Сохраняем и форсим relay
     window.__TURN__ = { iceServers, forceRelay: true, expiresAt };
-    console.log('TURN config loaded (TCP+UDP relay)', window.__TURN__);
+    console.log('TURN config loaded (TCP-only relay)', window.__TURN__);
 
     // Авто-обновление: за 60 сек до истечения
     if (window.__TURN_REFRESH_T) clearTimeout(window.__TURN_REFRESH_T);
