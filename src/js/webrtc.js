@@ -471,6 +471,16 @@
     return pc;
   }
 
+  // Wait for WebSocket to be open (readyState === 1) for up to timeout ms
+  async function waitWsOpen(timeout=2000){
+    const t0 = Date.now();
+    while (Date.now() - t0 < timeout) {
+      if (window.ws && window.ws.readyState === 1) return true;
+      await new Promise(r => setTimeout(r, 60));
+    }
+    return false;
+  }
+
   /**
    * Creates and sends an SDP offer to the remote peer if the signaling WebSocket is open,
    * and if an offer has not already been sent and the signaling state is stable.
@@ -482,6 +492,11 @@
     if (typeof window !== 'undefined' && window.__OFFER_SENT__) return;
     const r = __getRole();
     if (r !== 'caller') return; // callee never sends offer
+    // дождаться готовности WebSocket и роли caller
+    const ok = await waitWsOpen(2000);
+    if (!ok) { console.warn('[OFFER-FUNC] ws not ready'); return; }
+    const roleNow = __getRole();
+    if (roleNow !== 'caller') { console.warn('[OFFER-FUNC] role=', roleNow, 'skip'); return; }
     try {
       if (!(window.isWSOpen && window.isWSOpen())) return;
       if (!pc || !localStream) return;
