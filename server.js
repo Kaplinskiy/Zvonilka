@@ -91,6 +91,8 @@ const rooms = new Map();
 // Track peers per role and buffer ICE when the peer is not yet available
 const roomPeers = new Map(); // roomId -> { caller: WebSocket|null, callee: WebSocket|null }
 const iceBuffers = new Map(); // roomId -> { toCaller: [], toCallee: [] }
+// Buffer the latest offer per room until the callee connects
+const offerBuffers = new Map(); // roomId -> { type:'offer', sdp, offer? }
 
 // Add a WebSocket client to a room; create the room if it doesn't exist.
 // Assigns a private _roomId property to the WebSocket for easy reference.
@@ -170,6 +172,14 @@ wss.on('connection', (ws) => {
       if (Array.isArray(list) && list.length) {
         for (const m of list.splice(0)) {
           try { ws.send(JSON.stringify(m)); } catch {}
+        }
+      }
+      // If a callee just connected and there is a buffered offer, deliver it now
+      if (role === 'callee') {
+        const buffered = offerBuffers.get(roomId);
+        if (buffered) {
+          try { ws.send(JSON.stringify(buffered)); } catch {}
+          offerBuffers.delete(roomId);
         }
       }
     }
@@ -262,22 +272,29 @@ wss.on('connection', (ws) => {
       if (msg?.type) {
         console.log(`[SIGNAL OUT] ${roomId}`, msg.type);
       }
-      // Directed routing for ICE to the opposite role with buffering
-      if (msg && msg.type === 'ice') {
-        const srcRole = (ws._query && ws._query.role) || 'unknown';
-        const dstRole = otherRole(srcRole);
+      const srcRole = (ws._query && ws._query.role) || 'unknown';
+      const dstRole = otherRole(srcRole);
+      if (msg && (msg.type === 'ice' || msg.type === 'offer' || msg.type === 'answer' || msg.type === 'renegotiate')) {
         ensureRoomStruct(roomId);
         const peer = roomPeers.get(roomId)[dstRole];
         const payload = JSON.stringify(msg);
         if (peer && peer.readyState === WebSocket.OPEN) {
           try { peer.send(payload); } catch {}
         } else {
-          const buf = iceBuffers.get(roomId);
-          const key = dstRole === 'caller' ? 'toCaller' : 'toCallee';
-          buf[key].push(msg);
+          // Peer not yet connected: buffer what we safely can
+          if (msg.type === 'ice' && msg.candidate) {
+            const buf = iceBuffers.get(roomId);
+            const key = dstRole === 'caller' ? 'toCaller' : 'toCallee';
+            buf[key].push(msg);
+          }
+          if (msg.type === 'offer') {
+            // keep only the latest offer for this room
+            offerBuffers.set(roomId, msg);
+          }
+          // answers cannot be meaningfully buffered; if no peer, drop
         }
       } else {
-        // Non-ICE messages: keep broadcast to all except sender
+        // Non-RTC control messages are broadcast
         broadcast(roomId, msg, ws);
       }
     });
