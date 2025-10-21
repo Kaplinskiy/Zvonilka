@@ -327,22 +327,39 @@
     pc = new RTCPeerConnection(cfg);
     // Ensure offer is created when negotiation is needed (debounced to avoid double fires)
     pc.onnegotiationneeded = () => {
-      const r = __getRole();
-      // If callee needs to start sending media later, ask caller to re-offer
-      if (r === 'layee' /* typo guard fix */) {}
-      if (r === 'callee') {
-        try { window.addLog && window.addLog('signal', 'send renegotiate'); } catch {}
-        if (typeof window.ws !== 'undefined' && typeof window.wsSend === 'function') {
-          try { window.wsSend('renegotiate', { reason: 'track-or-direction-change' }); } catch {}
+      const role = __getRole();
+      console.debug('[NEGOTIATION] triggered, role =', role);
+
+      if (role === 'callee') {
+        try { window.addLog && window.addLog('signal', 'send renegotiate (callee)'); } catch {}
+        if (typeof window.wsSend === 'function') {
+          try { window.wsSend('renegotiate', { reason: 'track-or-direction-change' }); } catch (err) {
+            console.warn('[NEGOTIATION] renegotiate send failed', err);
+          }
         }
-        return; // callee does not call createOffer directly
+        return; // callee не создаёт offer
       }
-      // Caller path: debounce + single-offer guard
-      if (typeof window !== 'undefined' && window.__OFFER_SENT__) return;
-      if (negotiationScheduled) return;
+
+      // caller path — создаёт offer при необходимости
+      if (typeof window !== 'undefined' && window.__OFFER_SENT__) {
+        console.debug('[NEGOTIATION] skipped: offer already sent');
+        return;
+      }
+      if (negotiationScheduled) {
+        console.debug('[NEGOTIATION] skipped: already scheduled');
+        return;
+      }
       negotiationScheduled = true;
+      console.debug('[NEGOTIATION] scheduling offer creation...');
       setTimeout(async () => {
-        try { await sendOfferIfPossible(); } catch (e) { /* swallow */ } finally { negotiationScheduled = false; }
+        try {
+          await sendOfferIfPossible();
+        } catch (e) {
+          console.error('[NEGOTIATION] sendOfferIfPossible error', e);
+        } finally {
+          negotiationScheduled = false;
+          console.debug('[NEGOTIATION] done');
+        }
       }, 300);
     };
 
