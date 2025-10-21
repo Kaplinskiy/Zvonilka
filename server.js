@@ -178,6 +178,7 @@ wss.on('connection', (ws) => {
       if (role === 'callee') {
         const buffered = offerBuffers.get(roomId);
         if (buffered) {
+          console.log('[ROUTE]', roomId, 'replay buffered offer -> callee');
           try { ws.send(JSON.stringify(buffered)); } catch {}
           offerBuffers.delete(roomId);
         }
@@ -279,9 +280,11 @@ wss.on('connection', (ws) => {
         const peer = roomPeers.get(roomId)[dstRole];
         const payload = JSON.stringify(msg);
         if (peer && peer.readyState === WebSocket.OPEN) {
+          console.log('[ROUTE]', roomId, 'type=', msg.type, 'to=', dstRole, 'online');
           try { peer.send(payload); } catch {}
         } else {
           // Peer not yet connected: buffer what we safely can
+          console.log('[ROUTE]', roomId, 'type=', msg.type, 'to=', dstRole, 'buffered');
           if (msg.type === 'ice' && msg.candidate) {
             const buf = iceBuffers.get(roomId);
             const key = dstRole === 'caller' ? 'toCaller' : 'toCallee';
