@@ -373,6 +373,7 @@ function renderLangSwitch(active) {
         }
         case 'member.joined': {
           try {
+            console.log('[DEBUG] member.joined, role=', role);
             logT('signal', 'debug.signal_recv_member_joined');
             if (typeof role === 'string' && role !== 'caller') { break; }
             // Ensure TURN + mic + stable PC, then delegate to offer helper
