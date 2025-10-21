@@ -478,6 +478,7 @@
    * Logs signaling activity and errors.
    */
   async function sendOfferIfPossible() {
+    try { console.log('[OFFER-FUNC] enter, wsReady=', !!(window.ws && window.ws.readyState===1), 'pc=', !!pc, 'local=', !!localStream, 'role=', __getRole(), 'state=', pc && pc.signalingState); } catch {}
     if (typeof window !== 'undefined' && window.__OFFER_SENT__) return;
     const r = __getRole();
     if (r !== 'caller') return; // callee never sends offer
@@ -494,9 +495,11 @@
       await ensureAudioSender(pc, localStream);
       const offer = await pc.createOffer({ offerToReceiveAudio: 1 });
       await pc.setLocalDescription(offer);
+      try { console.log('[OFFER-FUNC] setLocal ok, iceState=', pc && pc.iceGatheringState); } catch {}
       await waitIceComplete(pc, 2500);
       const finalOffer = pc.localDescription || offer;
       const payload = { type: 'offer', sdp: finalOffer.sdp, offer: { type: 'offer', sdp: finalOffer.sdp } };
+      try { console.log('[OFFER-FUNC] sending offer via wsSend'); } catch {}
       window.wsSend && window.wsSend('offer', payload);
       offerSent = true;
       try { if (typeof window !== 'undefined') window.__OFFER_SENT__ = true; } catch {}
@@ -504,6 +507,7 @@
     } catch (e) {
       // allow retry on next negotiation
       offerSent = false;
+      try { console.error('[OFFER-FUNC] error', e && (e.message || e)); } catch {}
       window.addLog && window.addLog('error', 'sendOfferIfPossible: ' + (e.message || e));
     } finally {
       offerInProgress = false;
