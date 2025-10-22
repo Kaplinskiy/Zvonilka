@@ -1,7 +1,7 @@
 // public/js/webrtc.js
-// WebRTC logic. Exposes functions on the window object for use in index.html.
-// This script is loaded before a large inline script.
-// test
+// Cleaned and instrumented WebRTC core for Zvonilka.
+// Exposes a small, stable API on window: { getMic, createPC, sendOfferIfPossible, acceptIncoming, addRemoteIce, cleanup, getPC }
+// Detailed console logs (prefixed) help diagnose negotiation/ICE issues.
 (function () {
   if (typeof window !== 'undefined') {
     if (window.__WEBRTC_INITED__) { try { console.warn('[WEBRTC] duplicate init, skipping'); } catch {} return; }
@@ -46,7 +46,7 @@
   }
 
   // Feature flag: send full SDP only after ICE gathering completes
-  const NON_TRICKLE = true; // send full SDP only after ICE gathering completes
+  const NON_TRICKLE = true; // non-trickle: we send full SDP (incl. candidates) after gathering completes
   // Await ICE gathering completion for a given RTCPeerConnection
   async function waitIceComplete(pc, timeoutMs = 2000) {
     return new Promise((resolve) => {
@@ -102,6 +102,8 @@
   }
   // Flag indicating whether the remote description has been applied to the peer connection
   let remoteDescApplied = false;
+
+  function isWsReady(){ return !!(window && window.ws && window.ws.readyState === 1); }
 
   /**
    * Translation helper function.
@@ -326,7 +328,7 @@
       window.addLog && window.addLog('webrtc', 'create RTCPeerConnection ' + (cfg.iceTransportPolicy ? `(policy=${cfg.iceTransportPolicy})` : ''));
     } catch {}
     pc = new RTCPeerConnection(cfg);
-    // Ensure offer is created when negotiation is needed (debounced to avoid double fires)
+    // Ensure offer is created only when WS/role are ready; callee requests renegotiation
     pc.onnegotiationneeded = () => {
       const role = __getRole();
       console.debug('[NEGOTIATION] triggered, role =', role);
@@ -342,6 +344,10 @@
       }
 
       // caller path — создаёт offer при необходимости
+      if (!isWsReady()) {
+        console.debug('[NEGOTIATION] skipped: ws not ready');
+        return;
+      }
       if (typeof window !== 'undefined' && window.__OFFER_SENT__) {
         console.debug('[NEGOTIATION] skipped: offer already sent');
         return;
@@ -506,8 +512,9 @@
    * Logs signaling activity and errors.
    */
   async function sendOfferIfPossible() {
+    // robust guard and diagnostics
     try { console.log('[OFFER-FUNC] enter, wsReady=', !!(window.ws && window.ws.readyState===1), 'pc=', !!pc, 'local=', !!localStream, 'role=', __getRole(), 'state=', pc && pc.signalingState); } catch {}
-    if (typeof window !== 'undefined' && window.__OFFER_SENT__) return;
+    if (typeof window !== 'undefined' && window.__OFFER_SENT__) { console.debug('[OFFER-FUNC] skipped: __OFFER_SENT__'); return; }
     const r = __getRole();
     if (r !== 'caller') return; // callee never sends offer
     // дождаться готовности WebSocket и роли caller
