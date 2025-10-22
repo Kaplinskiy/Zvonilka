@@ -368,6 +368,12 @@ function renderLangSwitch(active) {
           memberId = msg.memberId || memberId;
           setStatusKey('ws.connected_room', 'ok', { room: (roomId || parseRoom() || '-') });
           logT('signal', 'debug.signal_recv_hello');
+          // After hello, WS is open and role is known. If we are the caller, trigger deferred offer.
+          if (role === 'caller') {
+            setTimeout(() => {
+              try { window.sendOfferIfPossible && window.sendOfferIfPossible(); } catch {}
+            }, 200);
+          }
           // Do NOT send offer on hello; wait for member.joined/peer.joined to ensure the peer is present.
           break;
         }

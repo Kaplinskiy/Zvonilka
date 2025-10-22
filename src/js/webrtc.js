@@ -19,6 +19,7 @@
   let offerSent = false;
   let offerInProgress = false;
   let negotiationScheduled = false;
+  let offerRetryT = null; // timer to retry offer when WS/role not ready
 
   // Ensure there is an <audio> sink and a one-time gesture to resume playback
   function ensureRemoteAudioEl(){
@@ -511,9 +512,17 @@
     if (r !== 'caller') return; // callee never sends offer
     // дождаться готовности WebSocket и роли caller
     const ok = await waitWsOpen(2000);
-    if (!ok) { console.warn('[OFFER-FUNC] ws not ready'); return; }
+    if (!ok) {
+      console.warn('[OFFER-FUNC] ws not ready, retry in 250ms');
+      if (!offerRetryT) offerRetryT = setTimeout(() => { offerRetryT = null; try { sendOfferIfPossible(); } catch {} }, 250);
+      return;
+    }
     const roleNow = __getRole();
-    if (roleNow !== 'caller') { console.warn('[OFFER-FUNC] role=', roleNow, 'skip'); return; }
+    if (roleNow !== 'caller') {
+      console.warn('[OFFER-FUNC] role=', roleNow, 'skip; retry in 250ms');
+      if (!offerRetryT) offerRetryT = setTimeout(() => { offerRetryT = null; try { sendOfferIfPossible(); } catch {} }, 250);
+      return;
+    }
     try {
       if (!(window.isWSOpen && window.isWSOpen())) return;
       if (!pc || !localStream) return;
@@ -533,6 +542,7 @@
       const payload = { type: 'offer', sdp: finalOffer.sdp, offer: { type: 'offer', sdp: finalOffer.sdp } };
       try { console.log('[OFFER-FUNC] sending offer via wsSend'); } catch {}
       window.wsSend && window.wsSend('offer', payload);
+      if (offerRetryT) { clearTimeout(offerRetryT); offerRetryT = null; }
       offerSent = true;
       try { if (typeof window !== 'undefined') window.__OFFER_SENT__ = true; } catch {}
       window.addLog && window.addLog('signal', 'send offer');
