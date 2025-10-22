@@ -324,8 +324,25 @@ function renderLangSwitch(active) {
   const WS_URL = (window.__APP_CONFIG__ && window.__APP_CONFIG__.WS_URL) || `${location.origin.replace(/^http/, 'ws')}/ws`;
 
   let roomId = null, memberId = null, role = null, pingTimer = null;
+  // expose role to webrtc (it reads window.role)
+  window.role = null;
   let pendingOffer = null;
   let offerAttempted = false;
+
+  // install a verbose WS send wrapper once
+  if (!window.__WS_SEND_WRAPPED && typeof window.wsSend === 'function') {
+    window.__WS_SEND_WRAPPED = true;
+    const __origSend = window.wsSend;
+    window.wsSend = function(type, payload){
+      try { console.debug('[WS-OUT]', type, 'ready=', window.ws && window.ws.readyState, payload && (payload.type||'obj')); } catch{}
+      return __origSend.apply(this, arguments);
+    };
+  }
+
+  // optional: log all inbound signaling messages
+  if (!window.__SIG_HOOK) {
+    window.__SIG_HOOK = (m)=>{ try{ if(m&&m.type) console.debug('[SIG<-SERVER]', m.type, m); }catch{} };
+  }
 
   // Guard duplicate or wrong-role offer attempts: wrap only if real impl exists
   (function guardOfferOnce(){
@@ -368,9 +385,15 @@ function renderLangSwitch(active) {
           memberId = msg.memberId || memberId;
           setStatusKey('ws.connected_room', 'ok', { room: (roomId || parseRoom() || '-') });
           logT('signal', 'debug.signal_recv_hello');
+          // ensure role is visible to webrtc layer
+          if (!role && typeof msg.role === 'string') {
+            role = msg.role; window.role = role; setRoleLabel(role === 'caller');
+            try { console.debug('[HELLO] role set from server =', role); } catch {}
+          }
           // After hello, WS is open and role is known. If we are the caller, trigger deferred offer.
           if (role === 'caller') {
             setTimeout(() => {
+              try { console.debug('[HELLO] trigger sendOfferIfPossible (ws ready =', (window.ws && window.ws.readyState), ')'); } catch {}
               try { window.sendOfferIfPossible && window.sendOfferIfPossible(); } catch {}
             }, 200);
           }
@@ -710,12 +733,12 @@ function renderLangSwitch(active) {
         btnCall.disabled = false;
         return;
       }
-      role = 'caller';
-      await connectWS('caller', roomId, onSignal);
-      shareRoomLink(roomId);
-      await startCaller();
-      setStatusKey('room.ready_share_link', 'ok');
-      if (btnHang) btnHang.disabled = false;
+    role = 'caller'; window.role = 'caller';
+    await connectWS('caller', roomId, onSignal);
+    shareRoomLink(roomId);
+    await startCaller();
+    setStatusKey('room.ready_share_link', 'ok');
+    if (btnHang) btnHang.disabled = false;
     } catch (e) {
       setStatus(i18next.t('error.room_create_failed'), 'err');
       logT('error', 'error.room_create_failed');
@@ -732,7 +755,7 @@ function renderLangSwitch(active) {
       logT('warn', 'warn.ws_already_connected_callee');
       return;
     }
-    role = 'callee'; roomId = rid;
+    role = 'callee'; window.role = 'callee'; roomId = rid;
 
     if (!isWSOpen()) await connectWS('callee', roomId, onSignal);
     else logT('warn', 'warn.ws_already_connected_callee');
