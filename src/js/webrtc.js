@@ -152,6 +152,7 @@
     const cfg = buildIceConfig();
     console.log('[CREATE PC] config', JSON.stringify(cfg));
     pc = new RTCPeerConnection(cfg);
+    try { window.getPC = () => pc; } catch (_) {}
 
     // ICE events
     pc.onicecandidate = (e) => {
