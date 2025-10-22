@@ -15,13 +15,15 @@
   let _ws = null;
   let _pingTimer = null;
 
-  // Global mirrors for current WS state (used to prevent duplicate connects)
+  // Expose live socket on window for other modules (main/webrtc)
   try {
     if (typeof window !== 'undefined') {
       window.__WS__ = window.__WS__ || null;
       window.__WS_ROOM__ = window.__WS_ROOM__ || null;
       window.__WS_ROLE__ = window.__WS_ROLE__ || null;
       window.__WS_BEFOREUNLOAD_BOUND__ = window.__WS_BEFOREUNLOAD_BOUND__ || false;
+      // ensure public handles exist
+      if (!('ws' in window)) window.ws = null;
     }
   } catch {}
 
@@ -48,25 +50,27 @@
 
   /**
    * Waits until the WebSocket connection is open or times out.
-   * Polls every 50ms up to the specified timeout.
-   * @param {number} timeoutMs - Timeout in milliseconds (default 1000ms)
+   * Polls every 80ms up to the specified timeout.
+   * @param {number} timeoutMs - Timeout in milliseconds (default 3000ms)
    * @returns {Promise<void>} Resolves when WebSocket is open, rejects on timeout
    */
-  function waitWSOpen(timeoutMs = 1000) {
+  function waitWSOpen(timeoutMs = 3000) {
     if (isWSOpen()) return Promise.resolve();
     return new Promise((resolve, reject) => {
       const started = Date.now();
       const timer = setInterval(() => {
-        if (_ws && (_ws.readyState === WebSocket.OPEN || _ws.readyState === WebSocket.CONNECTING)) {
-          clearInterval(timer);
+        const ready = (_ws && _ws.readyState === WebSocket.OPEN) || (typeof window !== 'undefined' && window.ws && window.ws.readyState === WebSocket.OPEN);
+        if (ready) {
+          clear = true;
+          clearTimeout(timer);
           resolve();
           return;
         }
-        if (Date.now() - started >= timeoutMs) {
+        if (Date.now() - started >= timeout) {
           clearInterval(timer);
           reject(new Error(t('ws.disconnected', 'WS not connected')));
         }
-      }, 50);
+      }, 80);
     });
   }
 
@@ -128,6 +132,7 @@ function connectWS(role, roomId, onMessage) {
           window.__WS__ = _ws;
           window.__WS_ROOM__ = roomId;
           window.__WS_ROLE__ = role;
+          window.ws = _ws;
           if (!window.__WS_BEFOREUNLOAD_BOUND__) {
             window.addEventListener('beforeunload', () => { try { _ws && _ws.close(1000, 'leave'); } catch {} });
             window.__WS_BEFOREUNLOAD_BOUND__ = true;
@@ -136,12 +141,11 @@ function connectWS(role, roomId, onMessage) {
       } catch {}
 
       _ws.onopen = () => {
+        window.ws = _ws;
         window.addLog && window.addLog('signal', 'ws open');
-        // Start sending ping messages every 20 seconds to keep connection alive
         _pingTimer = setInterval(() => {
           try { _ws?.send(JSON.stringify({ type: 'ping', t: Date.now() })); } catch {}
         }, 20_000);
-        // Reset connection attempt counter on successful connection
         attempt = 0;
       };
 
@@ -184,7 +188,16 @@ function connectWS(role, roomId, onMessage) {
       _ws.onclose = (e) => {
         window.addLog && window.addLog('signal', `ws close code=${e.code} reason=${e.reason || '-'}`);
         if (_pingTimer) { clearInterval(_pingTimer); _pingTimer = null; }
-        try { if (window.__WS__ === _ws) { window.__WS__ = null; window.__WS_ROOM__ = null; window.__WS_ROLE__ = null; } } catch {}
+        try {
+          if (typeof window !== 'undefined') {
+            if (window.__WS__ === _ws) {
+              window.__WS__ = null;
+              window.__WS_ROOM__ = null;
+              window.__WS_ROLE__ = null;
+              window.ws = null;
+            }
+          }
+        } catch {}
 
         // If the socket closed cleanly (normal closure codes), do not attempt reconnect
         const normal = (e.code === 1000 || e.code === 1005);
