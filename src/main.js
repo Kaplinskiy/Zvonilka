@@ -648,6 +648,13 @@ function renderLangSwitch(active) {
       try { await startAudioViz(s); } catch {}
       logT('webrtc', 'webrtc.remote_track');
     });
+    // After creating PC, reliably trigger offer once WS+PC are ready
+    try {
+      console.debug('[CALLER] PC created; triggering offer when ready (ws+pc)');
+      await triggerOfferWhenReady(5000);
+    } catch (e) {
+      try { console.warn('[CALLER] triggerOfferWhenReady error', e && (e.message || String(e))); } catch {}
+    }
     setStatusKey('room.ready_share_link', 'ok');
     if (btnHang) btnHang.disabled = false;
   }
