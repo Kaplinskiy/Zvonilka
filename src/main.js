@@ -330,19 +330,37 @@ function renderLangSwitch(active) {
   let offerAttempted = false;
 
   // Trigger offer only when WS is open and PC exists; retry with backoff for a short window
-  async function triggerOfferWhenReady(maxMs = 5000) {
+  async function triggerOfferWhenReady(maxMs = 10000) {
     const t0 = Date.now();
+    let pcCreatedOnce = false;
     while (Date.now() - t0 < maxMs) {
       try {
-        const wsReady = !!(window.ws && window.ws.readyState === 1);
-        const pc = (window.getPC && window.getPC());
-        const stable = pc && (!pc.signalingState || pc.signalingState === 'stable');
-        if (wsReady && pc && stable) {
+        // ensure WS open
+        if (!(window.ws && window.ws.readyState === 1)) {
+          if (typeof waitWSOpen === 'function') {
+            try { await waitWSOpen(800); } catch {}
+          } else {
+            await new Promise(r => setTimeout(r, 120));
+          }
+        }
+        const wsReadyNow = !!(window.ws && window.ws.readyState === 1);
+        // ensure PC exists
+        let pc = (window.getPC && window.getPC());
+        if (!pc && !pcCreatedOnce && typeof createPC === 'function') {
+          try { console.debug('[OFFER-TRIGGER] creating PC on demand'); createPC(() => {}); pcCreatedOnce = true; } catch {}
+          pc = (window.getPC && window.getPC());
+        }
+        const stable = pc && (!pc.signalingState || pc.signalingState === 'stable' || pc.signalingState === 'have-local-offer');
+        if (wsReadyNow && pc && stable) {
           if (typeof window.sendOfferIfPossible === 'function') {
-            console.debug('[OFFER-TRIGGER] wsReady, pc ready, calling sendOfferIfPossible');
+            console.debug('[OFFER-TRIGGER] wsReady, pc ready (state=', pc.signalingState, ') → sendOfferIfPossible');
             await window.sendOfferIfPossible();
           }
           return true;
+        }
+        // progress log every ~500ms
+        if ((Date.now() - t0) % 600 < 150) {
+          console.debug('[OFFER-TRIGGER] wait ws=', wsReadyNow, 'pc=', !!pc, 'state=', pc && pc.signalingState);
         }
       } catch {}
       await new Promise(r => setTimeout(r, 150));
