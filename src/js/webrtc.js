@@ -105,16 +105,19 @@
       const urls = (Array.isArray(s.urls) ? s.urls : [s.urls])
         .filter(Boolean)
         .map((u) => {
-          if (/^turns?:\/\/./i.test(String(u))) return String(u);
-          // allow bare host, normalize to turns://host:443?transport=tcp
-          const host = String(u).replace(/^https?:\/\//i, '').replace(/\/$/, '');
+          if (/^turns?:\/\//i.test(String(u))) return String(u); // already full TURN url
+          let host = String(u).replace(/^https?:\/\//i, '').replace(/\/$/, '');
+          // if backend sent just a keyword like "turns" or an empty/short token, fallback to default TURN host
+          if (!host || host.toLowerCase() === 'turns' || !/[a-z]\.[a-z]/i.test(host)) {
+            host = 'turn.zababba.com';
+          }
           return `turns:${host.replace(/:.*/, '')}:443?transport=tcp`;
         });
       return { urls, username: s.username, credential: s.credential, credentialType: s.credentialType || 'password' };
     });
 
     const cfg = { iceServers: norm };
-    if (t.forceRelay) cfg.hed = true, cfg.iceTransportPolicy = 'relay';
+    if (t.forceRelay) cfg.iceTransportPolicy = 'relay';
     try { console.log('[ICE CONFIG DEBUG]', JSON.stringify(cfg, null, 2)); } catch (_) {}
     return cfg;
   }

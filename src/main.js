@@ -329,6 +329,28 @@ function renderLangSwitch(active) {
   let pendingOffer = null;
   let offerAttempted = false;
 
+  // Trigger offer only when WS is open and PC exists; retry with backoff for a short window
+  async function triggerOfferWhenReady(maxMs = 5000) {
+    const t0 = Date.now();
+    while (Date.now() - t0 < maxMs) {
+      try {
+        const wsReady = !!(window.ws && window.ws.readyState === 1);
+        const pc = (window.getPC && window.getPC());
+        const stable = pc && (!pc.signalingState || pc.signalingState === 'stable');
+        if (wsReady && pc && stable) {
+          if (typeof window.sendOfferIfPossible === 'function') {
+            console.debug('[OFFER-TRIGGER] wsReady, pc ready, calling sendOfferIfPossible');
+            await window.sendOfferIfPossible();
+          }
+          return true;
+        }
+      } catch {}
+      await new Promise(r => setTimeout(r, 150));
+    }
+    console.warn('[OFFER-TRIGGER] timeout waiting ws/pc');
+    return false;
+  }
+
   // install a verbose WS send wrapper once
   if (!window.__WS_SEND_WRAPPED && typeof window.wsSend === 'function') {
     window.__WS_SEND_WRAPPED = true;
@@ -392,10 +414,8 @@ function renderLangSwitch(active) {
           }
           // After hello, WS is open and role is known. If we are the caller, trigger deferred offer.
           if (role === 'caller') {
-            setTimeout(() => {
-              try { console.debug('[HELLO] trigger sendOfferIfPossible (ws ready =', (window.ws && window.ws.readyState), ')'); } catch {}
-              try { window.sendOfferIfPossible && window.sendOfferIfPossible(); } catch {}
-            }, 200);
+            // Kick a reliable trigger that waits for ws+pc readiness
+            triggerOfferWhenReady(5000);
           }
           // Do NOT send offer on hello; wait for member.joined/peer.joined to ensure the peer is present.
           break;
@@ -418,23 +438,8 @@ function renderLangSwitch(active) {
             } catch {}
             try { window.__OFFER_SENT__ = false; } catch {}
             offerAttempted = false;
-            if (typeof window.sendOfferIfNeededAfterStable === 'function') {
-              await window.sendOfferIfNeededAfterStable();
-              logT('webrtc', 'webrtc.offer_sent_caller');
-            } else if (typeof window.sendOfferIfPossible === 'function') {
-              await window.sendOfferIfPossible();
-              logT('webrtc', 'webrtc.offer_sent_caller');
-            } else {
-              // Fallback: direct offer
-              const pc = (window.getPC && window.getPC());
-              if (!pc) throw new Error('PC not ready');
-              const offer = await pc.createOffer({ offerToReceiveAudio: 1 });
-              await pc.setLocalDescription(offer);
-              const payload = { type: 'offer', sdp: offer.sdp, offer: { type: 'offer', sdp: offer.sdp } };
-              if (typeof window.wsSend === 'function') window.wsSend('offer', payload);
-              logT('webrtc', 'webrtc.offer_sent_caller');
-              try { window.__OFFER_SENT__ = true; } catch {}
-            }
+            await triggerOfferWhenReady(5000);
+            logT('webrtc', 'webrtc.offer_sent_caller');
           } catch (e) {
             logT('error', 'error.offer_send_failed', { msg: (e?.message || String(e)) });
           }
