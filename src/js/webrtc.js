@@ -198,12 +198,18 @@
 
   async function sendOfferIfPossible() {
     console.log('[OFFER] enter', 'wsReady=', wsReady(), 'role=', getRole(), 'pc?', !!pc, 'state=', pc && pc.signalingState);
-    if (offerInProgress || offerSent) { console.debug('[OFFER] already in flight or sent'); return; }
+    if (offerRetryTimer) { console.debug('[OFFER] retry already scheduled'); return; }
+
+    // ensure we have a PeerConnection ready
+    if (!pc) {
+      console.debug('[OFFER] no pc yet, creating');
+      try { createPC && createPC(); } catch (_) {}
+    }
 
     const ok = await waitWsOpen(2000);
     if (!ok) {
-      console.warn('[OFFER] ws not ready; retry in 250ms');
-      if (!offerRetryTimer) offerRetryTimer = setTimeout(() => { offerRetryTimer = null; sendOfferIfPossible().catch(()=>{}); }, 250);
+      console.warn('[OFFER] ws not ready; schedule single retry in 250ms');
+      if (!offerRetryTimer) offerRetryTimer = setTimeout(() => { offerRetryTimer = null; try { sendOfferIfPossible(); } catch (_) {} }, 250);
       return;
     }
     const r = getRole();
@@ -223,6 +229,7 @@
       if (typeof window.wsSend === 'function') {
         window.wsSend('offer', { type: 'offer', sdp: final.sdp });
         offerSent = true; window.__SEND_OFFER_ONCE__ = true; log.ui('send offer');
+        if (offerRetryTimer) { clearTimeout(offerRetryTimer); offerRetryTimer = null; }
       } else {
         console.warn('[OFFER] wsSend missing; cannot transmit');
       }
