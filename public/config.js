@@ -67,7 +67,7 @@ function buildIceConfig(){
   async function loadTurnConfig() {
     try {
       const base = (window.__APP_CONFIG__ && window.__APP_CONFIG__.SERVER_URL) || '';
-      const url = base ? `${String(base).replace(/\/+$/,'')}/turn-credentials` : '/turn-credentials';
+      const url = base ? `${String(base).replace(/\/+$/,'')}/signal/turn-credentials` : '/signal/turn-credentials';
       const res = await fetch(url, { cache: 'no-store' });
       if (!res.ok) {
         console.warn('[WEBRTC] loadTurnConfig: failed to fetch TURN credentials, status:', res.status);
