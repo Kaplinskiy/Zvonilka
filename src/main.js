@@ -469,21 +469,19 @@ let offerAttempted = false;
             // Ensure TURN + mic + stable PC, then delegate to offer helper
             await waitTurnReady();
             await getMic();
-            // Ensure PC exists; create on demand if missing
+            // Ensure PC exists; create on demand if missing (awaited)
             if (!window.getPC || !window.getPC()) {
-              try {
-                console.debug('[CALLER] creating PC on demand in member.joined');
-                createPC(async (s) => {
-                  if (audioEl) {
-                    audioEl.muted = false;
-                    audioEl.srcObject = s;
-                    try { await audioEl.play(); } catch {}
-                  }
-                  bindRemoteStream(s);
-                  try { await startAudioViz(s); } catch {}
-                  logT('webrtc', 'webrtc.remote_track');
-                });
-              } catch (e) { console.warn('[CALLER] createPC in member.joined failed', e && (e.message || String(e))); }
+              console.debug('[CALLER] creating PC on demand in member.joined (await)');
+              await createPC(async (s) => {
+                if (audioEl) {
+                  audioEl.muted = false;
+                  audioEl.srcObject = s;
+                  try { await audioEl.play(); } catch {}
+                }
+                bindRemoteStream(s);
+                try { await startAudioViz(s); } catch {}
+                logT('webrtc', 'webrtc.remote_track');
+              });
             }
             try {
               const t0 = Date.now();
@@ -498,7 +496,7 @@ let offerAttempted = false;
             } catch {}
             try { window.__OFFER_SENT__ = false; } catch {}
             offerAttempted = false;
-            await sendInitialOfferOnce(3000);
+            await window.sendOfferIfPossible();
             logT('webrtc', 'webrtc.offer_sent_caller');
           } catch (e) {
             logT('error', 'error.offer_send_failed', { msg: (e?.message || String(e)) });
