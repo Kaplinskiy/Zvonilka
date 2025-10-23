@@ -36,6 +36,41 @@
   const getPC = () => pc;
   const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
+  // ---- Diagnostics ----
+  async function logSelectedPair(tag = '') {
+    try {
+      if (!pc) return;
+      const s = await pc.getStats();
+      let pair, loc, rem;
+      s.forEach(r => { if (r.type === 'transport' && r.selectedCandidatePairId) pair = s.get(r.selectedCandidatePairId); });
+      if (pair) { loc = s.get(pair.localCandidateId); rem = s.get(pair.remoteCandidateId); }
+      console.debug('[ICE-PAIR]', tag, {
+        state: pc.iceConnectionState,
+        nominated: pair && pair.nominated,
+        local: loc && { type: loc.candidateType, proto: loc.protocol, ip: loc.ip || loc.address },
+        remote: rem && { type: rem.candidateType, proto: rem.protocol, ip: rem.ip || rem.address }
+      });
+    } catch (_) {}
+  }
+  async function dumpRtp(tag = '') {
+    try {
+      if (!pc) return;
+      const s = await pc.getStats();
+      const inb = [], out = [];
+      s.forEach(r => {
+        if (r.type === 'inbound-rtp' && r.kind === 'audio') inb.push({ bytes: r.bytesReceived, pkts: r.packetsReceived, jitter: r.jitter });
+        if (r.type === 'outbound-rtp' && r.kind === 'audio') out.push({ bytes: r.bytesSent, pkts: r.packetsSent });
+      });
+      console.debug('[RTP]', tag, { inbound: inb, outbound: out });
+    } catch (_) {}
+  }
+  function logTransceivers(tag='') {
+    try {
+      const tx = pc && pc.getTransceivers ? pc.getTransceivers() : [];
+      console.debug('[TX]', tag, tx && tx.map(t => ({ mid: t.mid, dir: t.direction, cur: t.currentDirection })));
+    } catch (_) {}
+  }
+
   async function waitIceComplete(target, ms = 2500) {
     const t0 = Date.now();
     while (Date.now() < t0 + ms) {
@@ -188,6 +223,7 @@
     const cfg = buildIceConfig();
     console.log('[CREATE PC] config', JSON.stringify(cfg));
     pc = new RTCPeerConnection(cfg);
+    logTransceivers('after-create');
     try { window.getPC = () => pc; } catch (_) {}
 
     // ICE events
@@ -203,10 +239,10 @@
         if (!NON_TRICKLE && typeof window.wsSend === 'function') window.wsSend('ice', null);
       }
     };
-    pc.onicegatheringstatechange = () => { log.ui('gathering=' + pc.iceGatheringState); if (pc.iceGatheringState === 'complete') log.ui('ICE gathering complete'); };
-    pc.oniceconnectionstatechange = () => { const st = pc.get ? pc.iceConnectionState : pc.iceConnectionState; log.ui('ice=' + st); if (st === 'failed') { try { pc.restartIce(); log.ui('restartIce (failed)'); } catch (_) {} } };
+    pc.onicegatheringstatechange = () => { log.ui('gathering=' + pc.iceGatheringState); if (pc.iceGatheringState === 'complete') log.ui('ICE gathering complete'); logSelectedPair('gathering:'+pc.iceGatheringState); };
+    pc.oniceconnectionstatechange = () => { const st = pc.get ? pc.iceConnectionState : pc.iceConnectionState; dumpRtp('oniceconnectionstatechange:'+st); logSelectedPair('onice:'+st); log.ui('ice=' + st); if (st === 'failed') { try { pc.restartIce(); log.ui('restartIce (failed)'); } catch (_) {} } };
     pc.onconnectionstatechange = () => { log.d('connection=' + pc.connectionState); };
-    pc.ontrack = (e) => { const s = (e.streams && e.streams[0]) || (e.track ? new MediaStream([e.track]) : null); if (onTrackCb && s) onTrackCb(s); const a = ensureRemoteAudioElement(); a.srcObject = s; a.muted = false; a.play && a.play().catch(()=>{}); log.ui('webrtc.remote_track'); };
+    pc.ontrack = (e) => { console.debug('[TRACK]', { kind: e.track && e.track.kind, ready: e.track && e.track.readyState, streams: (e.streams||[]).length }); dumpRtp('ontrack'); const s = (e.streams && e.streams[0]) || (e.track ? new MediaStream([e.track]) : null); if (onTrackCb && s) onTrackCb(s); const a = ensureRemoteAudioElement(); a.srcObject = s; a.muted = false; a.play && a.play().catch(()=>{}); log.ui('webrtc.remote_track'); };
 
     // Pre-provision one audio transceiver to stabilize m-lines
     try { const tx = pc.getTransceivers ? pc.getTransceivers()[0] : null; if (!tx) pc.addTransceiver('audio', { direction: 'sendrecv' }); } catch (_) {}
@@ -218,6 +254,7 @@
       if (r !== 'caller') {
         if (r === 'callee' && typeof window.wsSend === 'function') {
           try { window.wsSend('renegotiate', { reason: 'onnegotiationneeded' }); log.ui('renegotiate request'); } catch (_) {}
+          logTransceivers('callee-onnegotiationneeded');
         }
         return;
       }
@@ -264,7 +301,10 @@
       await ensureAudioSender();
       const offer = await pc.createOffer({ offerToReceiveAudio: 1 });
       await pc.setLocalDescription(offer); console.debug('[OFFER] setLocal ok; gather=', pc.iceGatheringState);
+      await logSelectedPair('after-setLocal-offer');
       if (NON_TRICKLE) await waitIceComplete(pc, 2500);
+      await logSelectedPair('after-gather-offer');
+      await dumpRtp('after-gather-offer');
       const final = pc.localDescription || offer;
       console.debug('[OFFER] wsSend offer');
       if (typeof window.wsSend === 'function') {
@@ -288,12 +328,16 @@
       if (!pc) await createPC(onTrackCb);
       const sdp = typeof offer === 'string' ? offer : (offer.sdp || (offer.payload && offer.payload.sdp) || (offer.offer && offer.offer.sdp) || '');
       await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp }));
+      await logSelectedPair('after-setRemote-offer');
       log.ui('remote offer applied');
       await getMic();
       await ensureAudioSender();
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
+      await logSelectedPair('after-setLocal-answer');
       if (NON_TRICKLE) await waitIceComplete(pc, 2500);
+      await logSelectedPair('after-gather-answer');
+      await dumpRtp('after-gather-answer');
       const final = pc.localDescription || answer;
       if (typeof window.wsSend === 'function') { window.wsSend('answer', final); log.ui('send answer'); }
       // flush queued ICE
@@ -312,7 +356,7 @@
     if (!pc.remoteDescription) { remoteIceQueue.push(candidate); return; }
     if (candidate == null) { try { await pc.addIceCandidate(null); } catch (_) {} return; }
     const init = typeof candidate === 'string' ? { candidate: candidate } : candidate;
-    try { await pc.addIceCandidate(init); console.debug('[ICE<-REMOTE] added'); }
+    try { await pc.addIceCandidate(init); console.debug('[ICE<-REMOTE] added'); logSelectedPair('addRemoteIce'); }
     catch (e) { console.error('[ICE<-REMOTE] add failed', e); }
   }
 
