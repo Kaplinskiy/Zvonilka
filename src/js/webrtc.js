@@ -247,16 +247,25 @@
     pc.onconnectionstatechange = () => { log.d('connection=' + pc.connectionState); };
     pc.ontrack = (e) => { console.log('[TRACK]', { kind: e.track && e.track.kind, ready: e.track && e.track.readyState, streams: (e.streams||[]).length }); dumpRtp('ontrack'); const s = (e.streams && e.streams[0]) || (e.track ? new MediaStream([e.track]) : null); if (onTrackCb && s) onTrackCb(s); const a = ensureRemoteAudioElement(); a.srcObject = s; a.muted = false; a.play && a.play().catch(()=>{}); log.ui('webrtc.remote_track'); };
 
-    // Pre-provision one audio transceiver to stabilize m-lines
-    try { const tx = pc.getTransceivers ? pc.getTransceivers()[0] : null; if (!tx) pc.addTransceiver('audio', { direction: 'sendrecv' }); } catch (_) {}
+    // Pre-provision only for CALLER; callee waits for remote offer to define m-lines
+    try {
+      const r = getRole();
+      if (r === 'caller') {
+        const tx = pc.getTransceivers ? pc.getTransceivers()[0] : null;
+        if (!tx) pc.addTransceiver('audio', { direction: 'sendrecv' });
+      }
+    } catch (_) {}
 
     // Negotiation: only caller creates offers; callee asks via signaling
     pc.onnegotiationneeded = () => {
       const r = getRole();
       console.log('[NEGOTIATION] event role=', r, 'wsReady=', wsReady());
       if (r !== 'caller') {
-        if (r === 'callee' && typeof window.wsSend === 'function') {
-          try { window.wsSend('renegotiate', { reason: 'onnegotiationneeded' }); log.ui('renegotiate request'); } catch (_) {}
+        // Avoid spurious renegotiate on callee before remote offer is set
+        if (r === 'callee' && pc && pc.remoteDescription) {
+          if (typeof window.wsSend === 'function') {
+            try { window.wsSend('renegotiate', { reason: 'onnegotiationneeded' }); log.ui('renegotiate request'); } catch (_) {}
+          }
           logTransceivers('callee-onnegotiationneeded');
         }
         return;
@@ -339,6 +348,11 @@
       const sdp = typeof offer === 'string' ? offer : (offer.sdp || (offer.payload && offer.payload.sdp) || (offer.offer && offer.offer.sdp) || '');
       await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp }));
       await logSelectedPair('after-setRemote-offer');
+      // Align transceiver direction after applying remote offer (callee)
+      try {
+        const tx0 = pc.getTransceivers && pc.getTransceivers()[0];
+        if (tx0 && tx0.direction !== 'sendrecv') tx0.direction = 'sendrecv';
+      } catch (_) {}
       log.ui('remote offer applied');
       await getMic();
       await ensureAudioSender();
