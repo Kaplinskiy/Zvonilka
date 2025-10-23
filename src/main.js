@@ -326,8 +326,30 @@ function renderLangSwitch(active) {
   let roomId = null, memberId = null, role = null, pingTimer = null;
   // expose role to webrtc (it reads window.role)
   window.role = null;
-  let pendingOffer = null;
-  let offerAttempted = false;
+let pendingOffer = null;
+let offerAttempted = false;
+
+  // Direct one-shot initial offer sender (avoids timeouts in trigger)
+  async function sendInitialOfferOnce(maxWaitMs = 3000) {
+    // 1) ensure WS is OPEN
+    try { await (typeof waitWSOpen === 'function' ? waitWSOpen(1500) : Promise.resolve()); } catch {}
+    // 2) wait briefly until PC is stable or has local offer
+    const t0 = Date.now();
+    while (Date.now() - t0 < maxWaitMs) {
+      const pc = (window.getPC && window.getPC());
+      const st = pc && pc.signalingState;
+      if (pc && (st === 'stable' || st === 'have-local-offer' || !st)) break;
+      await new Promise(r => setTimeout(r, 100));
+    }
+    // 3) send offer once
+    if (typeof window.sendOfferIfPossible === 'function') {
+      console.debug('[CALLER] direct sendOfferIfPossible()');
+      await window.sendOfferIfPossible();
+      return true;
+    }
+    console.warn('[CALLER] sendOfferIfPossible missing');
+    return false;
+  }
 
   // Trigger offer only when WS is open and PC exists; retry with backoff for a short window
   async function triggerOfferWhenReady(maxMs = 10000) {
@@ -435,7 +457,7 @@ function renderLangSwitch(active) {
             role = msg.role; window.role = role; setRoleLabel(role === 'caller');
             try { console.debug('[HELLO] role set from server =', role); } catch {}
           }
-          
+
           // Do NOT send offer on hello; wait for member.joined/peer.joined to ensure the peer is present.
           break;
         }
@@ -476,7 +498,7 @@ function renderLangSwitch(active) {
             } catch {}
             try { window.__OFFER_SENT__ = false; } catch {}
             offerAttempted = false;
-            await triggerOfferWhenReady(5000);
+            await sendInitialOfferOnce(3000);
             logT('webrtc', 'webrtc.offer_sent_caller');
           } catch (e) {
             logT('error', 'error.offer_send_failed', { msg: (e?.message || String(e)) });
@@ -686,12 +708,12 @@ function renderLangSwitch(active) {
       try { await startAudioViz(s); } catch {}
       logT('webrtc', 'webrtc.remote_track');
     });
-    // After creating PC, reliably trigger offer once WS+PC are ready
+    // After creating PC, send initial offer directly once WS+PC are ready
     try {
-      console.debug('[CALLER] PC created; triggering offer when ready (ws+pc)');
-      await triggerOfferWhenReady(5000);
+      console.debug('[CALLER] PC created; sending initial offer (ws+pc)');
+      await sendInitialOfferOnce(3000);
     } catch (e) {
-      try { console.warn('[CALLER] triggerOfferWhenReady error', e && (e.message || String(e))); } catch {}
+      try { console.warn('[CALLER] direct initial offer error', e && (e.message || String(e))); } catch {}
     }
     setStatusKey('room.ready_share_link', 'ok');
     if (btnHang) btnHang.disabled = false;
