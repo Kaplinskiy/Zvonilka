@@ -248,7 +248,7 @@
   async function acceptIncoming(offer, onTrackCb) {
     try {
       if (!offer) { console.warn('[ACCEPT] no offer'); return; }
-      if (!pc) createPC(onTrackCb);
+      if (!pc) await createPC(onTrackCb);
       const sdp = typeof offer === 'string' ? offer : (offer.sdp || (offer.payload && offer.payload.sdp) || (offer.offer && offer.offer.sdp) || '');
       await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp }));
       log.ui('remote offer applied');
