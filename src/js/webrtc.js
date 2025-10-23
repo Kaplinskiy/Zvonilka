@@ -17,7 +17,7 @@
   /** @type {number|null} */ let offerRetryTimer = null;
   /** @type {RTCIceCandidateInit[]} */ const remoteIceQueue = (Array.isArray(window.__REMOTE_ICE_Q) ? window.__REMOTE_ICE_Q : (window.__REMOTE_ICE_Q = []));
 
-  const NON_TRICKLE = true; // send full SDP after gathering (helps avoid one‑way audio on relay)
+  const NON_TRICKLE = false; // send full SDP after gathering (helps avoid one‑way audio on relay)
 
   // ---------- Logging helpers ----------
   const log = {
