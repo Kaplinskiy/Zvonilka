@@ -425,6 +425,11 @@ function renderLangSwitch(active) {
           memberId = msg.memberId || memberId;
           setStatusKey('ws.connected_room', 'ok', { room: (roomId || parseRoom() || '-') });
           logT('signal', 'debug.signal_recv_hello');
+          // Wait explicitly for WS to be OPEN and log state
+          try {
+            await (typeof waitWSOpen === 'function' ? waitWSOpen(1500) : Promise.resolve());
+            console.debug('[HELLO] wsReady=', !!(window.ws && window.ws.readyState === 1));
+          } catch {}
           // ensure role is visible to webrtc layer
           if (!role && typeof msg.role === 'string') {
             role = msg.role; window.role = role; setRoleLabel(role === 'caller');
@@ -446,13 +451,32 @@ function renderLangSwitch(active) {
             // Ensure TURN + mic + stable PC, then delegate to offer helper
             await waitTurnReady();
             await getMic();
+            // Ensure PC exists; create on demand if missing
+            if (!window.getPC || !window.getPC()) {
+              try {
+                console.debug('[CALLER] creating PC on demand in member.joined');
+                createPC(async (s) => {
+                  if (audioEl) {
+                    audioEl.muted = false;
+                    audioEl.srcObject = s;
+                    try { await audioEl.play(); } catch {}
+                  }
+                  bindRemoteStream(s);
+                  try { await startAudioViz(s); } catch {}
+                  logT('webrtc', 'webrtc.remote_track');
+                });
+              } catch (e) { console.warn('[CALLER] createPC in member.joined failed', e && (e.message || String(e))); }
+            }
             try {
               const t0 = Date.now();
-              while (Date.now() - t0 < 2000) {
+              while (Date.now() - t0 < 3000) {
                 const pcw = (window.getPC && window.getPC());
-                if (pcw && (!pcw.signalingState || pcw.signalingState === 'stable')) break;
-                await new Promise(r => setTimeout(r, 80));
+                const st = pcw && pcw.signalingState;
+                if (pcw && (!st || st === 'stable' || st === 'have-local-offer')) break;
+                await new Promise(r => setTimeout(r, 100));
               }
+              const pcw2 = (window.getPC && window.getPC());
+              console.debug('[MEMBER.JOINED] pc state before offer =', pcw2 && pcw2.signalingState);
             } catch {}
             try { window.__OFFER_SENT__ = false; } catch {}
             offerAttempted = false;
