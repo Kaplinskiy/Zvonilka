@@ -1,7 +1,7 @@
 function buildIceConfig(){
     const t = (window && window.__TURN__) ? window.__TURN__ : {};
     const fallback = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
-    if (!t || !Array.isArray(t.iceServers) || t.ather) { // keep fallback if no valid servers
+    if (!t || !Array.isArray(t.iceServers) || !t.iceServers.length) { // keep fallback if no valid servers
       return fallback;
     }
     const fallbackHost = String((window.__APP_CONFIG && window.__APP_CONFIG.TURN_URL) || 'turns:turn.zababba.com:443?transport=tcp')
@@ -57,5 +57,8 @@ function buildIceConfig(){
     console.warn('[WEBRTC] waitTurnReady: timed out; proceeding with current config');
     return false;
   }
-  if (typeof window !== 'undefined') { window.waitTurnReady = waitTurnReady; }
-window.__TURN_PROMISE__ = loadTurnConfig().catch(()=>({}));
+  if (typeof window !== 'undefined') {
+    window.waitTurnReady = waitTurnReady;
+    // ensure the promise exists even if loadTurnConfig is not defined in this file
+    if (!window.__TURN_PROMISE__) window.__TURN_PROMISE__ = Promise.resolve();
+  }

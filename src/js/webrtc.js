@@ -240,13 +240,13 @@
     console.log('[OFFER] enter', 'wsReady=', wsReady(), 'role=', getRole(), 'pc?', !!pc, 'state=', pc && pc.signalingState);
     if (offerRetryTimer) { console.debug('[OFFER] retry already scheduled'); return; }
 
-    // ensure we have a PeerConnection ready
+    // ensure we have a PeerConnection ready (await async createPC)
     if (!pc) {
       console.debug('[OFFER] no pc yet, creating');
-      try { createPC && createPC(); } catch (_) {}
+      try { if (typeof createPC === 'function') await createPC(); } catch (_) {}
     }
 
-    const ok = await waitWsOpen(2000);
+    const ok = await waitWsOpen(4000);
     if (!ok) {
       console.warn('[OFFER] ws not ready; schedule single retry in 250ms');
       if (!offerRetryTimer) offerRetryTimer = setTimeout(() => { offerRetryTimer = null; try { sendOfferIfPossible(); } catch (_) {} }, 250);
