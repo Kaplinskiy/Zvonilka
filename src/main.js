@@ -435,11 +435,7 @@ function renderLangSwitch(active) {
             role = msg.role; window.role = role; setRoleLabel(role === 'caller');
             try { console.debug('[HELLO] role set from server =', role); } catch {}
           }
-          // After hello, WS is open and role is known. If we are the caller, trigger deferred offer.
-          if (role === 'caller') {
-            // Kick a reliable trigger that waits for ws+pc readiness
-            triggerOfferWhenReady(5000);
-          }
+          
           // Do NOT send offer on hello; wait for member.joined/peer.joined to ensure the peer is present.
           break;
         }
