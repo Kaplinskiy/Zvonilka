@@ -55,19 +55,20 @@
    * @returns {Promise<void>} Resolves when WebSocket is open, rejects on timeout
    */
   function waitWSOpen(timeoutMs = 3000) {
-    if (isWSOpen()) return Promise.resolve();
+    if (isWSOpen() || (typeof window !== 'undefined' && window.ws && window.ws.readyState === WebSocket.OPEN)) {
+      return Promise.resolve();
+    }
     return new Promise((resolve, reject) => {
       const started = Date.now();
-      const timer = setInterval(() => {
+      const iv = setInterval(() => {
         const ready = (_ws && _ws.readyState === WebSocket.OPEN) || (typeof window !== 'undefined' && window.ws && window.ws.readyState === WebSocket.OPEN);
         if (ready) {
-          clear = true;
-          clearTimeout(timer);
+          clearInterval(iv);
           resolve();
           return;
         }
-        if (Date.now() - started >= timeout) {
-          clearInterval(timer);
+        if (Date.now() - started >= timeoutMs) {
+          clearInterval(iv);
           reject(new Error(t('ws.disconnected', 'WS not connected')));
         }
       }, 80);
@@ -127,6 +128,9 @@ function connectWS(role, roomId, onMessage) {
       window.addLog && window.addLog('signal', `connect WS ${url}`);
 
       _ws = new WebSocket(url);
+      try { console.debug('[WS] opening', url); } catch {}
+      // ensure wsSend always targets current socket
+      try { if (typeof window !== 'undefined') { window.wsSend = wsSend; } } catch {}
       try {
         if (typeof window !== 'undefined') {
           window.__WS__ = _ws;
