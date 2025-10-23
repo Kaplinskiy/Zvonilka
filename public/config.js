@@ -40,7 +40,7 @@ async function loadTurnConfig() {
     const expiresAt = data.expires ? Date.parse(data.expires) : (ttlSec > 0 ? Date.now() + ttlSec * 1000 : 0);
 
     // Нормализуем iceServers: оставляем ТОЛЬКО TURNS/TCP и корректируем кривые значения ("turns" → turn.zababba.com).
-    const iceServers = (Array.isArray(data.iceServers) ? data.iceServers : [])
+    let iceServers = (Array.isArray(data.iceServers) ? data.iceServers : [])
       .map(s => ({ ...s }))
       .map(s => {
         const list = Array.isArray(s.urls) ? s.urls : (s.urls ? [s.urls] : []);
@@ -68,6 +68,20 @@ async function loadTurnConfig() {
           credentialType: s.credentialType || credType
         };
       });
+
+    // Final sanitize: fix any malformed entries like "turns:turns:443?transport=tcp"
+    iceServers = iceServers.map(s => ({
+      ...s,
+      urls: (Array.isArray(s.urls) ? s.urls : [s.urls]).filter(Boolean).map(u => {
+        let url = String(u).trim();
+        if (/^turns:turns:/i.test(url)) {
+          return 'turns:turn.zababba.com:443?transport=tcp';
+        }
+        // also guard against accidental double scheme like turns://turns...
+        url = url.replace(/^turns?:\/\/turns(?=:|\/)/i, 'turns:turn.zababba.com');
+        return url;
+      })
+    }));
 
     // Сохраняем и форсим relay
     window.__TURN__ = { iceServers, forceRelay: true, expiresAt };
