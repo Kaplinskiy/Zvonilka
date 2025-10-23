@@ -58,3 +58,4 @@ function buildIceConfig(){
     return false;
   }
   if (typeof window !== 'undefined') { window.waitTurnReady = waitTurnReady; }
+window.__TURN_PROMISE__ = loadTurnConfig().catch(()=>({}));

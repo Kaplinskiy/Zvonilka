@@ -693,6 +693,8 @@ let offerAttempted = false;
    * Start the caller flow: wait for WebSocket, get microphone, create peer connection.
    */
   async function startCaller() {
+    // Ensure TURN creds loaded before any PC creation
+    try { await (window.__TURN_PROMISE__ || Promise.resolve()); } catch {}
     if (waitWSOpen) await waitWSOpen(3000);
     setStatusKey('status.preparing', 'warn-txt');
     btnCall && (btnCall.disabled = true);
@@ -708,13 +710,6 @@ let offerAttempted = false;
       try { await startAudioViz(s); } catch {}
       logT('webrtc', 'webrtc.remote_track');
     });
-    // After creating PC, send initial offer directly once WS+PC are ready
-    try {
-      console.debug('[CALLER] PC created; sending initial offer (ws+pc)');
-      await sendInitialOfferOnce(3000);
-    } catch (e) {
-      try { console.warn('[CALLER] direct initial offer error', e && (e.message || String(e))); } catch {}
-    }
     setStatusKey('room.ready_share_link', 'ok');
     if (btnHang) btnHang.disabled = false;
   }
@@ -828,6 +823,8 @@ let offerAttempted = false;
       return;
     }
     role = 'callee'; window.role = 'callee'; roomId = rid;
+    // Ensure TURN creds loaded before any PC creation
+    try { await (window.__TURN_PROMISE__ || Promise.resolve()); } catch {}
 
     if (!isWSOpen()) await connectWS('callee', roomId, onSignal);
     else logT('warn', 'warn.ws_already_connected_callee');
