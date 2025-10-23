@@ -23,7 +23,7 @@ const TURN_URLS = (process.env.TURN_URLS || 'turns:turn.zababba.com:443?transpor
 const _ttl = Number.parseInt(process.env.TURN_TTL || '120', 10);
 const TURN_TTL = Number.isFinite(_ttl) ? Math.min(Math.max(_ttl, 60), 3600) : 120;
 
-// Build canonical TURN URL set (both TCP/TLS 443 and UDP 3478) from any input
+// Build canonical TURN URL set (TLS/TCP only, never UDP)
 function buildTurnUrls(urls) {
   const out = new Set();
   const list = Array.isArray(urls) ? urls : (urls ? [urls] : []);
@@ -31,13 +31,13 @@ function buildTurnUrls(urls) {
     if (!u) continue;
     const raw = String(u).trim();
 
-    // 1) If we already received full TURN/TURNS url(s), keep as is
+    // 1) If already a full TURN/TURNS url, keep as is (but only TURNS/TCP)
     if (/^turns?:\/\//i.test(raw)) {
-      out.add(raw);
+      if (/^turns:/i.test(raw)) out.add(raw); // keep only TLS/TCP variants
       continue;
     }
 
-    // 2) If only a host or accidental token (e.g., "turns"), normalize
+    // 2) If only a host or accidental token (e.g., "turns"), normalize to TLS/TCP on 443
     let host = raw
       .replace(/^https?:\/\//i, '')
       .replace(/^turns?:/i, '')
@@ -46,13 +46,9 @@ function buildTurnUrls(urls) {
       .split(':')[0]
       .trim();
 
-    // guard against bad inputs like "turns" or empty strings
-    if (!host || host.toLowerCase() === 'turns') {
-      host = 'turn.zababba.com';
-    }
+    if (!host || host.toLowerCase() === 'turns') host = 'turn.zababba.com';
 
     out.add(`turns:${host}:443?transport=tcp`);
-    out.add(`turn:${host}:3478?transport=udp`);
   }
   return Array.from(out);
 }
@@ -90,7 +86,8 @@ app.get('/turn-credentials', (req, res) => {
 
     // Prevent caching of credentials by clients
     res.set('Cache-Control', 'no-store');
-    const urls = buildTurnUrls(TURN_URLS);
+    // TCP-only relay for reliability
+    const urls = buildTurnUrls(TURN_URLS).filter((u) => /^turns:/i.test(u));
     return res.json({
       iceServers: [{ urls, username, credential, credentialType: 'password' }],
       ttl: TURN_TTL
