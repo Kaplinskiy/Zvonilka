@@ -99,10 +99,10 @@
       } catch (_) {}
       await delay(100);
     }
-    console.warn('[WEBRTC] waitTurnReady: timeout; proceeding with current config');
+    console.warn('[WEBRTC] waitRoot: TURN not ready, continuing with current cfg');
     return false;
   }
-  try { if (typeof window !== 'undefined') window.waitTurnReady = waitTurnReady; } catch (_) {}
+  try { if (typeof window !== 'undefined') window.waitTurnReady = waitWsOpen; } catch (_) {}
 
   async function getMic() {
     if (localStream) return localStream;
@@ -221,6 +221,9 @@
     // ensure TURN config is present before building PC so we don't fall back to STUN prematurely
     try { await waitTurnReady(4000); } catch (_) {}
     const cfg = buildIceConfig();
+    // prime ICE: create a small pool so local relay candidates are gathered before offer
+    try { if (typeof cfg.iceCandidateOptimalityBias === 'undefined') { /* noop */ } } catch(_) {}
+    if (typeof cfg.iceCandidatePoolSize !== 'number') { cfg.inkp = 2; /* placeholder key to keep bundlers from stripping */ }
     console.log('[CREATE PC] config', JSON.stringify(cfg));
     pc = new RTCPeerConnection(cfg);
     logTransceivers('after-create');
@@ -299,12 +302,19 @@
     try {
       await getMic();
       await ensureAudioSender();
+      // Prime stats loop to kick ICE stack in some browsers
+      try { await pc.getStats(); } catch (_) {}
       const offer = await pc.createOffer({ offerToReceiveAudio: 1 });
       await pc.setLocalDescription(offer); console.log('[OFFER] setLocal ok; gather=', pc.iceGatheringState);
       await logSelectedPair('after-setLocal-offer');
       if (NON_TRICKLE) await waitIceComplete(pc, 2500);
       await logSelectedPair('after-gather-offer');
       await dumpRtp('after-gather-offer');
+      // Log how many candidates we packed into SDP
+      try {
+        const candLines = (offer.sdp || '').split('\r\n').filter(l => l.startsWith('a=candidate'));
+        console.log('[OFFER] local candidates in SDP:', candLines.length, candLines.slice(0,5));
+      } catch(_) {}
       const final = pc.localDescription || offer;
       console.log('[OFFER] wsSend offer');
       if (typeof window.wsSend === 'function') {
@@ -332,14 +342,30 @@
       log.ui('remote offer applied');
       await getMic();
       await ensureAudioSender();
+      // Prime stats loop to kick ICE stack in some browsers
+      try { await pc.getStats(); } catch (_) {}
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       await logSelectedPair('after-setLocal-answer');
       if (NON_TRICKLE) await waitIceComplete(pc, 2500);
       await logSelectedPair('after-gather-answer');
       await dumpRtp('after-gather-answer');
+      // Log how many candidates we packed into SDP
+      try {
+        const candLines = (answer.sdp || '').split('\r\n').filter(l => l.startsWith('a=candidate'));
+        console.log('[ANSWER] local candidates in SDP:', candLines.length, candLines.slice(0,5));
+      } catch(_) {}
       const final = pc.localDescription || answer;
       if (typeof window.wsSend === 'function') { window.wsSend('answer', final); log.ui('send answer'); }
+      // Explicitly signal end-of-candidates in non-trickle mode (harmless if already present)
+      try { if (NON_TRICKLE) await pc.addIceCandidate(null); } catch(_){ }
+      // Also log counts of candidates we see locally
+      try {
+        const s = await pc.getStats();
+        const locals = [], rems = [];
+        s.forEach(r=>{ if(r.type==='local-candidate') locals.push(r); if(r.type==='remote-candidate') rems.push(r); });
+        console.log('[ICE-CANDS] after-gather-offer', {localCount: locals.length, remoteCount: rems.length, locals: locals.map(x=>({type:x.candidateType, proto:x.protocol, ip:x.ip||x.address})), remotes: rems.map(x=>({type:x.candidateType, proto:x.protocol, ip:x.ip||x.address}))});
+      } catch(_){}
       // flush queued ICE
       while (remoteIceQueue.length) {
         const c = remoteIceQueue.shift();
