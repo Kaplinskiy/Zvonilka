@@ -21,8 +21,8 @@
 
   // ---------- Logging helpers ----------
   const log = {
-    d: (...a) => { try { console.debug('[WEBRTC]', ...a); } catch (_) {} },
-    i: (...a) => { try { console.info('[WEBRTC]', ...a); } catch (_) {} },
+    d: (...a) => { try { console.log('[WEBRTC]', ...a); } catch (_) {} },
+    i: (...a) => { try { console.log('[WEBRTC]', ...a); } catch (_) {} },
     w: (...a) => { try { console.warn('[WEBRTC]', ...a); } catch (_) {} },
     e: (...a) => { try { console.error('[WEBRTC]', ...a); } catch (_) {} },
     ui: (k, v = '') => { try { window.addLog && window.addLog('webrtc', v ? `${k}: ${v}` : k); } catch (_) {} },
@@ -44,7 +44,7 @@
       let pair, loc, rem;
       s.forEach(r => { if (r.type === 'transport' && r.selectedCandidatePairId) pair = s.get(r.selectedCandidatePairId); });
       if (pair) { loc = s.get(pair.localCandidateId); rem = s.get(pair.remoteCandidateId); }
-      console.debug('[ICE-PAIR]', tag, {
+      console.log('[ICE-PAIR]', tag, {
         state: pc.iceConnectionState,
         nominated: pair && pair.nominated,
         local: loc && { type: loc.candidateType, proto: loc.protocol, ip: loc.ip || loc.address },
@@ -61,13 +61,13 @@
         if (r.type === 'inbound-rtp' && r.kind === 'audio') inb.push({ bytes: r.bytesReceived, pkts: r.packetsReceived, jitter: r.jitter });
         if (r.type === 'outbound-rtp' && r.kind === 'audio') out.push({ bytes: r.bytesSent, pkts: r.packetsSent });
       });
-      console.debug('[RTP]', tag, { inbound: inb, outbound: out });
+      console.log('[RTP]', tag, { inbound: inb, outbound: out });
     } catch (_) {}
   }
   function logTransceivers(tag='') {
     try {
       const tx = pc && pc.getTransceivers ? pc.getTransceivers() : [];
-      console.debug('[TX]', tag, tx && tx.map(t => ({ mid: t.mid, dir: t.direction, cur: t.currentDirection })));
+      console.log('[TX]', tag, tx && tx.map(t => ({ mid: t.mid, dir: t.direction, cur: t.currentDirection })));
     } catch (_) {}
   }
 
@@ -242,7 +242,7 @@
     pc.onicegatheringstatechange = () => { log.ui('gathering=' + pc.iceGatheringState); if (pc.iceGatheringState === 'complete') log.ui('ICE gathering complete'); logSelectedPair('gathering:'+pc.iceGatheringState); };
     pc.oniceconnectionstatechange = () => { const st = pc.get ? pc.iceConnectionState : pc.iceConnectionState; dumpRtp('oniceconnectionstatechange:'+st); logSelectedPair('onice:'+st); log.ui('ice=' + st); if (st === 'failed') { try { pc.restartIce(); log.ui('restartIce (failed)'); } catch (_) {} } };
     pc.onconnectionstatechange = () => { log.d('connection=' + pc.connectionState); };
-    pc.ontrack = (e) => { console.debug('[TRACK]', { kind: e.track && e.track.kind, ready: e.track && e.track.readyState, streams: (e.streams||[]).length }); dumpRtp('ontrack'); const s = (e.streams && e.streams[0]) || (e.track ? new MediaStream([e.track]) : null); if (onTrackCb && s) onTrackCb(s); const a = ensureRemoteAudioElement(); a.srcObject = s; a.muted = false; a.play && a.play().catch(()=>{}); log.ui('webrtc.remote_track'); };
+    pc.ontrack = (e) => { console.log('[TRACK]', { kind: e.track && e.track.kind, ready: e.track && e.track.readyState, streams: (e.streams||[]).length }); dumpRtp('ontrack'); const s = (e.streams && e.streams[0]) || (e.track ? new MediaStream([e.track]) : null); if (onTrackCb && s) onTrackCb(s); const a = ensureRemoteAudioElement(); a.srcObject = s; a.muted = false; a.play && a.play().catch(()=>{}); log.ui('webrtc.remote_track'); };
 
     // Pre-provision one audio transceiver to stabilize m-lines
     try { const tx = pc.getTransceivers ? pc.getTransceivers()[0] : null; if (!tx) pc.addTransceiver('audio', { direction: 'sendrecv' }); } catch (_) {}
@@ -250,7 +250,7 @@
     // Negotiation: only caller creates offers; callee asks via signaling
     pc.onnegotiationneeded = () => {
       const r = getRole();
-      console.debug('[NEGOTIATION] event role=', r, 'wsReady=', wsReady());
+      console.log('[NEGOTIATION] event role=', r, 'wsReady=', wsReady());
       if (r !== 'caller') {
         if (r === 'callee' && typeof window.wsSend === 'function') {
           try { window.wsSend('renegotiate', { reason: 'onnegotiationneeded' }); log.ui('renegotiate request'); } catch (_) {}
@@ -258,8 +258,8 @@
         }
         return;
       }
-      if (!wsReady()) { console.debug('[NEGOTIATION] ws not ready'); return; }
-      if (offerInProgress || offerSent || negotiationScheduled) { console.debug('[NEGOTIATION] skip, busy'); return; }
+      if (!wsReady()) { console.log('[NEGOTIATION] ws not ready'); return; }
+      if (offerInProgress || offerSent || negotiationScheduled) { console.log('[NEGOTIATION] skip, busy'); return; }
       negotiationScheduled = true;
       setTimeout(() => { sendOfferIfPossible().finally(() => { negotiationScheduled = false; }); }, 200);
     };
@@ -274,11 +274,11 @@
   }
 
   async function sendOfferIfPossible() {
-    if (offerRetryTimer) { console.debug('[OFFER] retry already scheduled'); return; }
+    if (offerRetryTimer) { console.log('[OFFER] retry already scheduled'); return; }
 
     // ensure we have a PeerConnection ready (await async createPC)
     if (!pc) {
-      console.debug('[OFFER] no pc yet, creating');
+      console.log('[OFFER] no pc yet, creating');
       try { if (typeof createPC === 'function') await createPC(); } catch (_) {}
     }
     const st0 = pc && pc.signalingState;
@@ -291,22 +291,22 @@
       return;
     }
     const r = getRole();
-    if (r !== 'caller') { console.debug('[OFFER] not caller (', r, ')'); return; }
+    if (r !== 'caller') { console.log('[OFFER] not caller (', r, ')'); return; }
     if (!pc) { console.warn('[OFFER] no pc'); return; }
-    if (!(pc.signalingState === 'stable' || pc.signalingState === 'have-local-offer')) { console.debug('[OFFER] not stable:', pc.signalingState); return; }
+    if (!(pc.signalingState === 'stable' || pc.signalingState === 'have-local-offer')) { console.log('[OFFER] not stable:', pc.signalingState); return; }
 
     offerInProgress = true;
     try {
       await getMic();
       await ensureAudioSender();
       const offer = await pc.createOffer({ offerToReceiveAudio: 1 });
-      await pc.setLocalDescription(offer); console.debug('[OFFER] setLocal ok; gather=', pc.iceGatheringState);
+      await pc.setLocalDescription(offer); console.log('[OFFER] setLocal ok; gather=', pc.iceGatheringState);
       await logSelectedPair('after-setLocal-offer');
       if (NON_TRICKLE) await waitIceComplete(pc, 2500);
       await logSelectedPair('after-gather-offer');
       await dumpRtp('after-gather-offer');
       const final = pc.localDescription || offer;
-      console.debug('[OFFER] wsSend offer');
+      console.log('[OFFER] wsSend offer');
       if (typeof window.wsSend === 'function') {
         window.wsSend('offer', { type: 'offer', sdp: final.sdp });
         offerSent = true; window.__SEND_OFFER_ONCE__ = true; log.ui('send offer');
@@ -318,7 +318,7 @@
       offerSent = false; console.error('[OFFER] error', e);
     } finally {
       offerInProgress = false;
-      console.debug('[OFFER] done; ice=', pc && pc.iceConnectionState);
+      console.log('[OFFER] done; ice=', pc && pc.iceConnectionState);
     }
   }
 
@@ -356,7 +356,7 @@
     if (!pc.remoteDescription) { remoteIceQueue.push(candidate); return; }
     if (candidate == null) { try { await pc.addIceCandidate(null); } catch (_) {} return; }
     const init = typeof candidate === 'string' ? { candidate: candidate } : candidate;
-    try { await pc.addIceCandidate(init); console.debug('[ICE<-REMOTE] added'); logSelectedPair('addRemoteIce'); }
+    try { await pc.addIceCandidate(init); console.log('[ICE<-REMOTE] added'); logSelectedPair('addRemoteIce'); }
     catch (e) { console.error('[ICE<-REMOTE] add failed', e); }
   }
 
