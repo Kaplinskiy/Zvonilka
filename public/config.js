@@ -39,21 +39,27 @@ async function loadTurnConfig() {
     const ttlSec = Number(data.ttl || 0);
     const expiresAt = data.expires ? Date.parse(data.expires) : (ttlSec > 0 ? Date.now() + ttlSec * 1000 : 0);
 
-    // Нормализуем iceServers: оставляем ТОЛЬКО TLS/TCP (без UDP), так как relay по UDP блокируется у провайдеров.
+    // Нормализуем iceServers: оставляем ТОЛЬКО TURNS/TCP и корректируем кривые значения ("turns" → turn.zababba.com).
     const iceServers = (Array.isArray(data.iceServers) ? data.iceServers : [])
       .map(s => ({ ...s }))
       .map(s => {
         const list = Array.isArray(s.urls) ? s.urls : (s.urls ? [s.urls] : []);
         const norm = new Set();
+        // derive default host from APP_CONFIG if available
+        const fallbackTurn = (window.__APP_CONFIG__ && window.__APP_CONFIG__.TURN_URL) || 'turns:turn.zababba.com:443?transport=tcp';
+        const fallbackHost = String(fallbackTurn).replace(/^turns?:\/{0,2}/i, '').split(/[/?#:]/)[0].split(':')[0] || 'turn.zababba.com';
         for (let u of list) {
-          if (!/^turns?:/i.test(u)) { norm.add(u); continue; }
-          // Гарантированно убираем схему и оставляем только хост
-          const clean = (u || '').trim().replace(/^turns?:\/{0,2}/i, '');
-          const hostOnly = clean.split(/[/?#:]/)[0];
-
-          // Правильные ICE URI без дублирования схемы
-          const withTcp = `turns:${hostOnly}:443?transport=tcp`;
-          norm.add(withTcp);
+          const raw = (u || '').trim();
+          // If full TURN url provided, normalize to TURNS/TCP and extract host
+          if (/^turns?:\/\//i.test(raw)) {
+            const host = raw.replace(/^turns?:\/{0,2}/i, '').split(/[/?#:]/)[0].split(':')[0] || fallbackHost;
+            norm.add(`turns:${host}:443?transport=tcp`);
+            continue;
+          }
+          // Host-only or malformed token (e.g. "turns"): coerce to canonical TURNS/TCP
+          let hostOnly = raw.replace(/^https?:\/{0,2}/i, '').replace(/^turns?:/i, '').replace(/\/$/, '').split(/[/?#:]/)[0].split(':')[0];
+          if (!hostOnly || hostOnly.toLowerCase() === 'turns') hostOnly = fallbackHost;
+          norm.add(`turns:${hostOnly}:443?transport=tcp`);
         }
         return {
           urls: Array.from(norm),
