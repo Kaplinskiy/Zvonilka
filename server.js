@@ -30,13 +30,29 @@ function buildTurnUrls(urls) {
   for (let u of list) {
     if (!u) continue;
     const raw = String(u).trim();
-    // strip scheme and query; leave only host
-    const withoutScheme = raw.replace(/^turns?:\/{0,2}/i, '').replace(/^turns?:\/{0,2}/i, '');
-    const hostOnly = withoutScheme.split('?')[0].split(':')[0];
-    if (!hostOnly) continue;
-    // canonical pair
-    out.add(`turns:${hostOnly}:443?transport=tcp`);
-    out.add(`turn:${hostOnly}:3478?transport=udp`);
+
+    // 1) If we already received full TURN/TURNS url(s), keep as is
+    if (/^turns?:\/\//i.test(raw)) {
+      out.add(raw);
+      continue;
+    }
+
+    // 2) If only a host or accidental token (e.g., "turns"), normalize
+    let host = raw
+      .replace(/^https?:\/\//i, '')
+      .replace(/^turns?:/i, '')
+      .replace(/\/$/, '')
+      .split('?')[0]
+      .split(':')[0]
+      .trim();
+
+    // guard against bad inputs like "turns" or empty strings
+    if (!host || host.toLowerCase() === 'turns') {
+      host = 'turn.zababba.com';
+    }
+
+    out.add(`turns:${host}:443?transport=tcp`);
+    out.add(`turn:${host}:3478?transport=udp`);
   }
   return Array.from(out);
 }
