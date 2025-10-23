@@ -237,7 +237,6 @@
   }
 
   async function sendOfferIfPossible() {
-    console.log('[OFFER] enter', 'wsReady=', wsReady(), 'role=', getRole(), 'pc?', !!pc, 'state=', pc && pc.signalingState);
     if (offerRetryTimer) { console.debug('[OFFER] retry already scheduled'); return; }
 
     // ensure we have a PeerConnection ready (await async createPC)
@@ -245,6 +244,8 @@
       console.debug('[OFFER] no pc yet, creating');
       try { if (typeof createPC === 'function') await createPC(); } catch (_) {}
     }
+    const st0 = pc && pc.signalingState;
+    console.log('[OFFER] enter (post-PC)', 'wsReady=', wsReady(), 'role=', getRole(), 'pc?', !!pc, 'state=', st0);
 
     const ok = await waitWsOpen(4000);
     if (!ok) {
