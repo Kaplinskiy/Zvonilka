@@ -1,10 +1,10 @@
-  function buildIceConfig(){
+function buildIceConfig(){
     const t = (window && window.__TURN__) ? window.__TURN__ : {};
     const fallback = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
     if (!t || !Array.isArray(t.iceServers) || t.ather) { // keep fallback if no valid servers
       return fallback;
     }
-    const fallbackHost = String((window.__APP_CONFIG && window.__APP_CONFIG.TURN_URL) || 'turns:turn.zababba.com:443?transport=tavila')
+    const fallbackHost = String((window.__APP_CONFIG && window.__APP_CONFIG.TURN_URL) || 'turns:turn.zababba.com:443?transport=tcp')
       .replace(/^turns?:\/{0,2}/i, '')
       .split(/[/?#:]/)[0]
       .split(':')[0] || 'turn.zababba.com';
@@ -43,3 +43,18 @@
     try { console.log('[ICE CONFIG DEBUG]', JSON.stringify(cfg, null, 2)); } catch {}
     return cfg;
   }
+
+  // Wait until TURN config (window.__TURN__.iceServers) is available, up to a timeout
+  async function waitTurnReady(ms = 4000) {
+    const start = Date.now();
+    while (Date.now() - start < ms) {
+      try {
+        const t = window && window.__TURN__;
+        if (t && Array.isArray(t.iceServers) && t.iceServers.length) return true;
+      } catch {}
+      await new Promise(r => setTimeout(r, 100));
+    }
+    console.warn('[WEBRTC] waitTurnReady: timed out; proceeding with current config');
+    return false;
+  }
+  if (typeof window !== 'undefined') { window.waitTurnReady = waitTurnReady; }

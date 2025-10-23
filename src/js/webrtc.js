@@ -54,6 +54,21 @@
     return false;
   }
 
+  // Wait until TURN config (window.__TURN__.iceServers) is available (or timeout)
+  async function waitTurnReady(ms = 4000) {
+    const t0 = Date.now();
+    while (Date.now() < t0 + ms) {
+      try {
+        const t = window && window.__TURN__;
+        if (t && Array.isArray(t.iceServers) && t.iceServers.length) return true;
+      } catch (_) {}
+      await delay(100);
+    }
+    console.warn('[WEBRTC] waitTurnReady: timeout; proceeding with current config');
+    return false;
+  }
+  try { if (typeof window !== 'undefined') window.waitTurnReady = waitTurnReady; } catch (_) {}
+
   async function getMic() {
     if (localStream) return localStream;
     try {
@@ -95,25 +110,44 @@
   function buildIceConfig() {
     const t = window.__TURN__ || {};
     const fallback = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
-    if (!Array.isArray(t.iceServers) || !t.hasOwnProperty('iceServers') || t.iceServers.length === 0) {
+    if (!Array.isArray(t.iceServers) || !t.iceServers.length) {
       log.i('[ICE] using STUN fallback');
       return fallback;
     }
+    const defaultHost = 'turn.zababba.com';
 
-    const servers = t.iceServers;
-    const norm = servers.map(s => {
-      const urls = (Array.isArray(s.urls) ? s.urls : [s.urls])
-        .filter(Boolean)
-        .map((u) => {
-          if (/^turns?:\/\//i.test(String(u))) return String(u); // already full TURN url
-          let host = String(u).replace(/^https?:\/\//i, '').replace(/\/$/, '');
-          // if backend sent just a keyword like "turns" or an empty/short token, fallback to default TURN host
-          if (!host || host.toLowerCase() === 'turns' || !/[a-z]\.[a-z]/i.test(host)) {
-            host = 'turn.zababba.com';
-          }
-          return `turns:${host.replace(/:.*/, '')}:443?transport=tcp`;
-        });
-      return { urls, username: s.username, credential: s.credential, credentialType: s.credentialType || 'password' };
+    const norm = t.iceServers.map((s) => {
+      const list = Array.isArray(s.urls) ? s.urls : (s.urls ? [s.urls] : []);
+      const out = new Set();
+      for (let u of list) {
+        if (!u) continue;
+        let raw = String(u).trim();
+        // sanitize double-scheme cases: turns:turns:host → host
+        raw = raw.replace(/^turns?:\/\/{0,2}/i, 'turns:'); // normalize scheme prefix
+        if (/^turns:turns:/i.test(raw)) raw = raw.replace(/^turns:/i, '');
+
+        let host;
+        if (/^turns:/i.test(raw)) {
+          // strip scheme and any path/query
+          const after = raw.replace(/^turns:/i, '');
+          host = after.split(/[/?#:]/)[0].split(':')[0];
+        } else if (/^turn:/i.test(raw)) {
+          // ignore non-TLS turn, coerce to TLS
+          const after = raw.replace(/^turn:/i, '');
+          host = after.split(/[/?#:]/)[0].split(':')[0];
+        } else {
+          // bare host (or garbage token)
+          host = raw.replace(/^https?:\/\//i, '').split(/[/?#:]/)[0].split(':')[0];
+        }
+        if (!host || host.toLowerCase() === 'turns') host = defaultHost;
+        out.add(`turns:${host}:443?transport=tcp`);
+      }
+      return {
+        urls: Array.from(out),
+        username: s.username,
+        credential: s.credential,
+        credentialType: s.credentialType || 'password',
+      };
     });
 
     const cfg = { iceServers: norm };
@@ -149,6 +183,8 @@
   }
 
   async function createPC(onTrackCb) {
+    // ensure TURN config is present before building PC so we don't fall back to STUN prematurely
+    try { await waitTurnReady(4000); } catch (_) {}
     const cfg = buildIceConfig();
     console.log('[CREATE PC] config', JSON.stringify(cfg));
     pc = new RTCPeerConnection(cfg);
