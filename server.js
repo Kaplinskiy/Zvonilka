@@ -6,6 +6,8 @@ import http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { parse as parseUrl } from 'url';
 import crypto from 'crypto';
+import dotenv from 'dotenv';
+dotenv.config();
 
 const app = express();
 app.use(cors());
@@ -72,30 +74,31 @@ app.all('/signal/create/rooms', createRoomHandler);
 
 // Endpoint to issue temporary TURN credentials using HMAC-SHA1 as per coturn "REST API" specification.
 // Returns iceServers configuration with credentials valid for TURN_TTL seconds.
-app.get('/turn-credentials', (req, res) => {
+function issueTurnCreds(req, res) {
   try {
     if (!TURN_SECRET) {
-      return res.status(500).json({ error: 'TURN_SECRET is not set on server' });
+      console.error('[TURN] TURN_SECRET is not set on server (env)');
+      res.set('Cache-Control', 'no-store');
+      return res.status(503).json({ error: 'TURN misconfigured: TURN_SECRET missing' });
     }
-    // User identifier limited to 32 characters; default is 'zvonilka'.
     const user = (req.query.user || 'zvonilka').toString().slice(0, 32);
-    const expiry = Math.floor(Date.now() / 1000) + TURN_TTL; // UNIX timestamp in seconds
+    const expiry = Math.floor(Date.now() / 1000) + TURN_TTL;
     const username = `${expiry}:${user}`;
-    // Generate HMAC-SHA1 credential based on username and TURN_SECRET
     const credential = crypto.createHmac('sha1', TURN_SECRET).update(username).digest('base64');
-
-    // Prevent caching of credentials by clients
     res.set('Cache-Control', 'no-store');
-    // TCP-only relay for reliability
     const urls = buildTurnUrls(TURN_URLS).filter((u) => /^turns:/i.test(u));
     return res.json({
       iceServers: [{ urls, username, credential, credentialType: 'password' }],
-      ttl: TURN_TTL
+      ttl: TURN_TTL,
     });
-  } catch {
+  } catch (e) {
+    console.error('[TURN] credentials failure', e && (e.message || e));
     return res.status(500).json({ error: 'turn-credentials failure' });
   }
-});
+}
+app.get('/turn-credentials', issueTurnCreds);
+// compatibility alias for older clients
+app.get('/signal/turn-credentials', issueTurnCreds);
 
 const server = http.createServer(app);
 
