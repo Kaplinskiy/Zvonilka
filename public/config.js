@@ -62,3 +62,25 @@ function buildIceConfig(){
     // ensure the promise exists even if loadTurnConfig is not defined in this file
     if (!window.__TURN_PROMISE__) window.__TURN_PROMISE__ = Promise.resolve();
   }
+
+  // Load TURN configuration asynchronously
+  async function loadTurnConfig() {
+    try {
+      const response = await fetch('/signal/turn-credentials');
+      if (!response.ok) {
+        console.warn('[WEBRTC] loadTurnConfig: failed to fetch TURN credentials, status:', response.status);
+        window.__TURN__ = {};
+        return {};
+      }
+      const data = await response.json();
+      window.__TURN__ = data || {};
+      return window.__TURN__;
+    } catch (err) {
+      console.warn('[WEBRTC] loadTurnConfig: error fetching TURN credentials', err);
+      window.__TURN__ = {};
+      return {};
+    }
+  }
+  if (typeof window !== 'undefined') {
+    window.__TURN_PROMISE__ = loadTurnConfig().catch(() => ({}));
+  }
