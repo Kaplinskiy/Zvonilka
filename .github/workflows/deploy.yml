@@ -92,6 +92,18 @@ jobs:
             fi
           "
 
+      - name: Upload and enable nginx site (from repo)
+        if: env.SSH_HOST != '' && env.DEPLOY_PATH != ''
+        run: |
+          scp -P "${SSH_PORT:-22}" .github/workflows/call.zababba.com.conf "${SSH_USER}@${SSH_HOST}":/tmp/call.zababba.com.conf
+          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" '
+            set -e
+            sudo mv /tmp/call.zababba.com.conf /etc/nginx/sites-available/call.zababba.com.conf
+            sudo ln -sfn /etc/nginx/sites-available/call.zababba.com.conf /etc/nginx/sites-enabled/call.zababba.com.conf
+            sudo nginx -t
+            sudo systemctl reload nginx
+          '
+
       # (Опционально) Перекатить статику атомарно через симлинк, если используется версияция релизов
       # Раскомментируй и адаптируй при необходимости
       # - name: Atomic switch (optional)
