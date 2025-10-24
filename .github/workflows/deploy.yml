@@ -113,22 +113,29 @@ jobs:
           TURN_IP:       ${{ secrets.TURN_IP }}
           TURN_IP2:      ${{ secrets.TURN_IP2 }}
         run: |
-          # upload coturn template from repo
-          scp -P "${SSH_PORT:-22}" .github/workflows/turnserver.conf "${SSH_USER}@${SSH_HOST}":/tmp/turnserver.conf.tpl
-          # substitute vars and install to /etc/turnserver.conf, then restart coturn
-          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "
-            set -e
-            RENDER_TPL=\$(mktemp)
-            OUT=/tmp/turnserver.rendered
-            export TURN_SECRET TURN_IP TURN_IP2
-            # convert {{VAR}} -> ${VAR} for envsubst and render to a fixed temp path
-            sed -E 's/\{\{([A-Z0-9_]+)\}\}/\$\{\1\}/g' /tmp/turnserver.conf.tpl > \"$RENDER_TPL\"
-            envsubst < \"$RENDER_TPL\" > \"$OUT\"
-            echo \"$SUDO_PASSWORD\" | sudo -S install -m 0644 \"$OUT\" /etc/turnserver.conf
-            echo \"--- /etc/turnserver.conf (effective) ---\"
-            egrep -v '^#|^$' /etc/turnserver.conf || true
-            echo \"$SUDO_PASSWORD\" | sudo -S systemctl restart coturn
-            sudo systemctl status coturn --no-pager -l | head -n 30
+          set -e
+          # Render template locally (requires envsubst from gettext-base)
+          sudo apt-get update -y >/dev/null 2>&1 || true
+          sudo apt-get install -y gettext-base >/dev/null 2>&1 || true
+          export TURN_SECRET TURN_IP TURN_IP2
+          TMP_CFG=$(mktemp)
+          RENDER_TPL=$(mktemp)
+          # convert {{VAR}} -> ${VAR} for envsubst, then render
+          sed -E 's/\{\{([A-Z0-9_]+)\}\}/\$\{\1\}/g' .github/workflows/turnserver.conf > "$RENDER_TPL"
+          envsubst < "$RENDER_TPL" > "$TMP_CFG"
+
+          echo "--- rendered turnserver.conf ---"
+          sed -e '/^$/d' -e '/^#/d' "$TMP_CFG"
+
+          # upload and install on server
+          scp -P "${SSH_PORT:-22}" "$TMP_CFG" "${SSH_USER}@${SSH_HOST}:/tmp/turnserver.conf"
+          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "\
+            set -e; \
+            echo \"$SUDO_PASSWORD\" | sudo -S install -m 0644 /tmp/turnserver.conf /etc/turnserver.conf; \
+            echo \"--- /etc/turnserver.conf (effective) ---\"; \
+            egrep -v '^#|^$' /etc/turnserver.conf || true; \
+            echo \"$SUDO_PASSWORD\" | sudo -S systemctl restart coturn; \
+            sudo systemctl status coturn --no-pager -l | head -n 30; \
           "
 
       - name: Upload and enable nginx site (from repo)
