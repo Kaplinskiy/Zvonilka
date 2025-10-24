@@ -113,21 +113,24 @@ jobs:
           TURN_IP:       ${{ secrets.TURN_IP }}
           TURN_IP2:      ${{ secrets.TURN_IP2 }}
         run: |
-          # Render template locally using envsubst and upload
-          set -e
-          TMP_CFG=$(mktemp)
-          export TURN_SECRET TURN_IP TURN_IP2
-          envsubst < .github/workflows/turnserver.conf > "$TMP_CFG"
-
-          echo "--- rendered turnserver.conf ---"
-          sed -e '/^$/d' -e '/^#/d' "$TMP_CFG"
-
-          scp -P "${SSH_PORT:-22}" "$TMP_CFG" "${SSH_USER}@${SSH_HOST}:/tmp/turnserver.conf"
-          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "\
-            set -e; \
-            echo \"$SUDO_PASSWORD\" | sudo -S mv /tmp/turnserver.conf /etc/turnserver.conf; \
-            echo \"$SUDO_PASSWORD\" | sudo -S systemctl restart coturn; \
-            sudo systemctl status coturn --no-pager -l | head -n 30; \
+          # upload coturn template from repo
+          scp -P "${SSH_PORT:-22}" .github/workflows/turnserver.conf "${SSH_USER}@${SSH_HOST}":/tmp/turnserver.conf.tpl
+          # substitute vars and install to /etc/turnserver.conf, then restart coturn
+          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "
+            set -e;
+            TMP_CFG=\$(mktemp)
+            RENDER_TPL=\$(mktemp)
+            export TURN_SECRET TURN_IP TURN_IP2
+            # convert {{VAR}} -> \${VAR} for envsubst
+            sed -E 's/\{\{([A-Z0-9_]+)\}\}/\\\$\{\\1\}/g' /tmp/turnserver.conf.tpl > \"\$RENDER_TPL\"
+            envsubst < \"\$RENDER_TPL\" > \"\$TMP_CFG\"
+            echo \"$SUDO_PASSWORD\" | sudo -S bash -lc '
+              mv \"\$TMP_CFG\" /etc/turnserver.conf && \
+              echo \"--- /etc/turnserver.conf (effective) ---\" && \
+              egrep -v \"^#|^$\" /etc/turnserver.conf || true && \
+              systemctl restart coturn && \
+              systemctl status coturn --no-pager -l | head -n 30
+            '
           "
 
       - name: Upload and enable nginx site (from repo)
