@@ -1,4 +1,3 @@
-
 function buildIceConfig(){
     const t = (window && window.__TURN__) ? window.__TURN__ : {};
     const fallback = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
@@ -92,8 +91,8 @@ function buildIceConfig(){
           .map(u => {
             let url = String(u).trim();
             if (/^turns:turns:/i.test(url)) url = `turns:${fallbackHost}:5349?transport=tcp`;
-            if (/^turns?:\/\//i.test(url)) {
-              let host = url.replace(/^turns?:\/{0,2}/i, '').split(/[/?#:]/)[0].split(':')[0];
+            if (/^turns?:/i.test(url)) {
+              let host = url.replace(/^turns?:\/{0,2}/i, '').replace(/^turns?:/i, '').split(/[/?#:]/)[0].split(':')[0];
               if (!host || host.toLowerCase() === 'turns') host = fallbackHost;
               return [
                 `turns:${host}:5349?transport=tcp`,
@@ -109,6 +108,7 @@ function buildIceConfig(){
           })
           .flat()
           .filter(Boolean)
+          .filter(u => !/^turns:turn:/i.test(u))
       }));
       const cfg = { iceServers, forceRelay: true, expiresAt: data.expiresAt || 0 };
       window.__TURN__ = cfg;
