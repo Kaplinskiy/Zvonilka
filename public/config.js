@@ -1,3 +1,12 @@
+import fs from 'fs';
+import dotenv from 'dotenv';
+// Load TURN_SECRET from system-wide env if exists
+if (fs.existsSync('/etc/call-signal.env')) {
+  dotenv.config({ path: '/etc/call-signal.env' });
+} else {
+  dotenv.config();
+}
+
 function buildIceConfig(){
     const t = (window && window.__TURN__) ? window.__TURN__ : {};
     const fallback = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
@@ -23,12 +32,14 @@ function buildIceConfig(){
           let host = after.split(/[/?#:]/)[0].split(':')[0];
           if (!host) host = fallbackHost;
           out.add(`turns:${host}:5349?transport=tcp`);
+          out.add(`turn:${host}:3478?transport=udp`);
           continue;
         }
         // Bare host: coerce to TURNS on 5349
         let host = raw.replace(/^https?:\/{0,2}/i, '').split(/[/?#:]/)[0].split(':')[0];
         if (!host) host = fallbackHost;
         out.add(`turns:${host}:5349?transport=tcp`);
+        out.add(`turn:${host}:3478?transport=udp`);
       }
       return {
         urls: Array.from(out),
@@ -81,29 +92,35 @@ function buildIceConfig(){
       }
       const data = await res.json();
       const fallbackHost = 'turn.zababba.com';
-      // normalize to TURNS/TCP only and sanitize malformed entries
+      // normalize to TURNS/TCP and TURN/UDP and sanitize malformed entries
       let iceServers = (Array.isArray(data.iceServers) ? data.iceServers : []).map(s => ({
         ...s,
         urls: (Array.isArray(s.urls) ? s.urls : [s.urls])
           .filter(Boolean)
           .map(u => {
             let url = String(u).trim();
-            if (/^turns:turns:/i.test(url)) return `turns:${fallbackHost}:5349?transport=tcp`;
+            if (/^turns:turns:/i.test(url)) url = `turns:${fallbackHost}:5349?transport=tcp`;
             if (/^turns?:\/\//i.test(url)) {
               let host = url.replace(/^turns?:\/{0,2}/i, '').split(/[/?#:]/)[0].split(':')[0];
               if (!host || host.toLowerCase() === 'turns') host = fallbackHost;
-              return `turns:${host}:5349?transport=tcp`;
+              return [
+                `turns:${host}:5349?transport=tcp`,
+                `turn:${host}:3478?transport=udp`
+              ];
             }
             let host = url.replace(/^https?:\/{0,2}/i, '').split(/[/?#:]/)[0].split(':')[0];
             if (!host || host.toLowerCase() === 'turns') host = fallbackHost;
-            return `turns:${host}:5349?transport=tcp`;
+            return [
+              `turns:${host}:5349?transport=tcp`,
+              `turn:${host}:3478?transport=udp`
+            ];
           })
+          .flat()
+          .filter(Boolean)
       }));
-      // enforce tcp-only
-      iceServers = iceServers.map(s => ({ ...s, urls: s.urls.filter(u => /^turns:/i.test(u)) }));
       const cfg = { iceServers, forceRelay: true, expiresAt: data.expiresAt || 0 };
       window.__TURN__ = cfg;
-      console.log('TURN config loaded (TCP-only relay)', cfg);
+      console.log('TURN config loaded (TCP+UDP relay)', cfg);
       return cfg;
     } catch (err) {
       console.warn('[WEBRTC] loadTurnConfig: error fetching TURN credentials', err);

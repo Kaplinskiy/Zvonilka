@@ -142,54 +142,54 @@
     }
   }
 
-  function buildIceConfig() {
-    const t = window.__TURN__ || {};
-    const fallback = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
-    if (!Array.isArray(t.iceServers) || !t.iceServers.length) {
-      log.i('[ICE] using STUN fallback');
-      return fallback;
-    }
-    const defaultHost = 'turn.zababba.com';
-
-    const norm = t.iceServers.map((s) => {
-      const list = Array.isArray(s.urls) ? s.urls : (s.urls ? [s.urls] : []);
-      const out = new Set();
-      for (let u of list) {
-        if (!u) continue;
-        let raw = String(u).trim();
-        // sanitize double-scheme cases: turns:turns:host → host
-        raw = raw.replace(/^turns?:\/\/{0,2}/i, 'turns:'); // normalize scheme prefix
-        if (/^turns:turns:/i.test(raw)) raw = raw.replace(/^turns:/i, '');
-
-        let host;
-        if (/^turns:/i.test(raw)) {
-          // strip scheme and any path/query
-          const after = raw.replace(/^turns:/i, '');
-          host = after.split(/[/?#:]/)[0].split(':')[0];
-        } else if (/^turn:/i.test(raw)) {
-          // ignore non-TLS turn, coerce to TLS
-          const after = raw.replace(/^turn:/i, '');
-          host = after.split(/[/?#:]/)[0].split(':')[0];
-        } else {
-          // bare host (or garbage token)
-          host = raw.replace(/^https?:\/\//i, '').split(/[/?#:]/)[0].split(':')[0];
-        }
-        if (!host || host.toLowerCase() === 'turns') host = defaultHost;
-        out.add(`turns:${host}:5349?transport=tcp`);
-      }
-      return {
-        urls: Array.from(out),
-        username: s.username,
-        credential: s.credential,
-        credentialType: s.credentialType || 'password',
-      };
-    });
-
-    const cfg = { iceServers: norm };
-    if (t.forceRelay) cfg.iceTransportPolicy = 'relay';
-    try { console.log('[ICE CONFIG DEBUG]', JSON.stringify(cfg, null, 2)); } catch (_) {}
-    return cfg;
+function buildIceConfig() {
+  const t = window.__TURN__ || {};
+  const fallback = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+  if (!Array.isArray(t.iceServers) || !t.iceServers.length) {
+    log.i('[ICE] using STUN fallback');
+    return fallback;
   }
+  const defaultHost = 'turn.zababba.com';
+
+  const norm = t.iceServers.map((s) => {
+    const list = Array.isArray(s.urls) ? s.urls : (s.urls ? [s.urls] : []);
+    const out = new Set();
+    for (let u of list) {
+      if (!u) continue;
+      let raw = String(u).trim();
+      // sanitize double-scheme cases: turns:turns:host → host
+      raw = raw.replace(/^turns?:\/\/{0,2}/i, 'turns:'); // normalize scheme prefix
+      if (/^turns:turns:/i.test(raw)) raw = raw.replace(/^turns:/i, '');
+
+      let host;
+      if (/^turns:/i.test(raw)) {
+        // strip scheme and any path/query
+        const after = raw.replace(/^turns:/i, '');
+        host = after.split(/[/?#:]/)[0].split(':')[0];
+      } else if (/^turn:/i.test(raw)) {
+        // ignore non-TLS turn, coerce to TLS
+        const after = raw.replace(/^turn:/i, '');
+        host = after.split(/[/?#:]/)[0].split(':')[0];
+      } else {
+        // bare host (or garbage token)
+        host = raw.replace(/^https?:\/\//i, '').split(/[/?#:]/)[0].split(':')[0];
+      }
+      if (!host || host.toLowerCase() === 'turns') host = defaultHost;
+      out.add(`turns:${host}:5349?transport=tcp`);
+    }
+    return {
+      urls: Array.from(out),
+      username: s.username,
+      credential: s.credential,
+      credentialType: s.credentialType || 'password',
+    };
+  }).filter(s => s.urls && s.urls.length); // filter out any entries with empty urls
+
+  const cfg = { iceServers: norm };
+  if (t.forceRelay) cfg.iceTransportPolicy = 'relay';
+  try { console.log('[ICE CONFIG DEBUG]', JSON.stringify(cfg, null, 2)); } catch (_) {}
+  return cfg;
+}
 
   function ensureRemoteAudioElement() {
     let a = document.getElementById('remoteAudio') || document.querySelector('audio');

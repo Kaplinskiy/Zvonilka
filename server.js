@@ -25,21 +25,22 @@ const TURN_URLS = (process.env.TURN_URLS || 'turns:turn.zababba.com:5349?transpo
 const _ttl = Number.parseInt(process.env.TURN_TTL || '120', 10);
 const TURN_TTL = Number.isFinite(_ttl) ? Math.min(Math.max(_ttl, 60), 3600) : 120;
 
-// Build canonical TURN URL set (TLS/TCP only, never UDP)
+// Build canonical TURN URL set (TLS/TCP and UDP)
 function buildTurnUrls(urls) {
   const out = new Set();
   const list = Array.isArray(urls) ? urls : (urls ? [urls] : []);
   for (let u of list) {
     if (!u) continue;
     const raw = String(u).trim();
-
-    // 1) If already a full TURN/TURNS url, keep as is (but only TURNS/TCP)
+    // If full TURN/TURNS url -> extract host and normalize to both tcp/udp variants
     if (/^turns?:\/\//i.test(raw)) {
-      if (/^turns:/i.test(raw)) out.add(raw); // keep only TLS/TCP variants
+      let host = raw.replace(/^turns?:\/{0,2}/i, '').split(/[/?#:]/)[0].split(':')[0];
+      if (!host || host.toLowerCase() === 'turns') host = 'turn.zababba.com';
+      out.add(`turns:${host}:5349?transport=tcp`);
+      out.add(`turn:${host}:3478?transport=udp`);
       continue;
     }
-
-    // 2) If only a host or accidental token (e.g., "turns"), normalize to TLS/TCP on 5349
+    // Host-only token -> add both tcp/udp
     let host = raw
       .replace(/^https?:\/\//i, '')
       .replace(/^turns?:/i, '')
@@ -47,10 +48,9 @@ function buildTurnUrls(urls) {
       .split('?')[0]
       .split(':')[0]
       .trim();
-
     if (!host || host.toLowerCase() === 'turns') host = 'turn.zababba.com';
-
     out.add(`turns:${host}:5349?transport=tcp`);
+    out.add(`turn:${host}:3478?transport=udp`);
   }
   return Array.from(out);
 }
@@ -86,7 +86,7 @@ function issueTurnCreds(req, res) {
     const username = `${expiry}:${user}`;
     const credential = crypto.createHmac('sha1', TURN_SECRET).update(username).digest('base64');
     res.set('Cache-Control', 'no-store');
-    const urls = buildTurnUrls(TURN_URLS).filter((u) => /^turns:/i.test(u));
+    const urls = buildTurnUrls(TURN_URLS); // include both TURNS/TCP and TURN/UDP
     return res.json({
       iceServers: [{ urls, username, credential, credentialType: 'password' }],
       ttl: TURN_TTL,
