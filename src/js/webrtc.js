@@ -175,7 +175,7 @@
           host = raw.replace(/^https?:\/\//i, '').split(/[/?#:]/)[0].split(':')[0];
         }
         if (!host || host.toLowerCase() === 'turns') host = defaultHost;
-        out.add(`turns:${host}:443?transport=tcp`);
+        out.add(`turns:${host}:5349?transport=tcp`);
       }
       return {
         urls: Array.from(out),

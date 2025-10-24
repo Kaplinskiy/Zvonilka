@@ -4,7 +4,7 @@ function buildIceConfig(){
     if (!t || !Array.isArray(t.iceServers) || !t.iceServers.length) { // keep fallback if no valid servers
       return fallback;
     }
-    const fallbackHost = String((window.__APP_CONFIG && window.__APP_CONFIG.TURN_URL) || 'turns:turn.zababba.com:443?transport=tcp')
+    const fallbackHost = String((window.__APP_CONFIG && window.__APP_CONFIG.TURN_URL) || 'turns:turn.zababba.com:5349?transport=tcp')
       .replace(/^turns?:\/{0,2}/i, '')
       .split(/[/?#:]/)[0]
       .split(':')[0] || 'turn.zababba.com';
@@ -22,13 +22,13 @@ function buildIceConfig(){
           after = after.replace(/^turns:\/\//i, '').replace(/^turns:/i, '');
           let host = after.split(/[/?#:]/)[0].split(':')[0];
           if (!host) host = fallbackHost;
-          out.add(`turns:${host}:443?transport=tcp`);
+          out.add(`turns:${host}:5349?transport=tcp`);
           continue;
         }
-        // Bare host: coerce to TURNS on 443
+        // Bare host: coerce to TURNS on 5349
         let host = raw.replace(/^https?:\/{0,2}/i, '').split(/[/?#:]/)[0].split(':')[0];
         if (!host) host = fallbackHost;
-        out.add(`turns:${host}:443?transport=tcp`);
+        out.add(`turns:${host}:5349?transport=tcp`);
       }
       return {
         urls: Array.from(out),
@@ -72,7 +72,7 @@ function buildIceConfig(){
       if (!res.ok) {
         console.warn('[WEBRTC] loadTurnConfig: failed to fetch TURN credentials, status:', res.status);
         const cfg = {
-          iceServers: [{ urls: ['turns:turn.zababba.com:443?transport=tcp'], username: '', credential: '', credentialType: 'password' }],
+          iceServers: [{ urls: ['turns:turn.zababba.com:5349?transport=tcp'], username: '', credential: '', credentialType: 'password' }],
           forceRelay: true,
           expiresAt: Date.now() + 120000
         };
@@ -88,15 +88,15 @@ function buildIceConfig(){
           .filter(Boolean)
           .map(u => {
             let url = String(u).trim();
-            if (/^turns:turns:/i.test(url)) return `turns:${fallbackHost}:443?transport=tcp`;
+            if (/^turns:turns:/i.test(url)) return `turns:${fallbackHost}:5349?transport=tcp`;
             if (/^turns?:\/\//i.test(url)) {
               let host = url.replace(/^turns?:\/{0,2}/i, '').split(/[/?#:]/)[0].split(':')[0];
               if (!host || host.toLowerCase() === 'turns') host = fallbackHost;
-              return `turns:${host}:443?transport=tcp`;
+              return `turns:${host}:5349?transport=tcp`;
             }
             let host = url.replace(/^https?:\/{0,2}/i, '').split(/[/?#:]/)[0].split(':')[0];
             if (!host || host.toLowerCase() === 'turns') host = fallbackHost;
-            return `turns:${host}:443?transport=tcp`;
+            return `turns:${host}:5349?transport=tcp`;
           })
       }));
       // enforce tcp-only
@@ -108,7 +108,7 @@ function buildIceConfig(){
     } catch (err) {
       console.warn('[WEBRTC] loadTurnConfig: error fetching TURN credentials', err);
       const cfg = {
-        iceServers: [{ urls: ['turns:turn.zababba.com:443?transport=tcp'], username: '', credential: '', credentialType: 'password' }],
+        iceServers: [{ urls: ['turns:turn.zababba.com:5349?transport=tcp'], username: '', credential: '', credentialType: 'password' }],
         forceRelay: true,
         expiresAt: Date.now() + 120000
       };

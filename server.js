@@ -16,7 +16,7 @@ app.use(express.json());
 // TURN dynamic credentials configuration (compatible with coturn REST API style)
 // Required: TURN_SECRET must match coturn's static-auth-secret for HMAC authentication.
 const TURN_SECRET = process.env.TURN_SECRET || '';
-const TURN_URLS = (process.env.TURN_URLS || 'turns:turn.zababba.com:443?transport=tcp')
+const TURN_URLS = (process.env.TURN_URLS || 'turns:turn.zababba.com:5349?transport=tcp')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
@@ -39,7 +39,7 @@ function buildTurnUrls(urls) {
       continue;
     }
 
-    // 2) If only a host or accidental token (e.g., "turns"), normalize to TLS/TCP on 443
+    // 2) If only a host or accidental token (e.g., "turns"), normalize to TLS/TCP on 5349
     let host = raw
       .replace(/^https?:\/\//i, '')
       .replace(/^turns?:/i, '')
@@ -50,7 +50,7 @@ function buildTurnUrls(urls) {
 
     if (!host || host.toLowerCase() === 'turns') host = 'turn.zababba.com';
 
-    out.add(`turns:${host}:443?transport=tcp`);
+    out.add(`turns:${host}:5349?transport=tcp`);
   }
   return Array.from(out);
 }
