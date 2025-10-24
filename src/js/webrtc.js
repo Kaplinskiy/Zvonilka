@@ -102,7 +102,7 @@
     console.warn('[WEBRTC] waitRoot: TURN not ready, continuing with current cfg');
     return false;
   }
-  try { if (typeof window !== 'undefined') window.waitTurnReady = waitWsOpen; } catch (_) {}
+  try { if (typeof window !== 'undefined') window.waitTurnReady = waitTurnReady; } catch (_) {}
 
   async function getMic() {
     if (localStream) return localStream;
@@ -221,9 +221,8 @@
     // ensure TURN config is present before building PC so we don't fall back to STUN prematurely
     try { await waitTurnReady(4000); } catch (_) {}
     const cfg = buildIceConfig();
-    // prime ICE: create a small pool so local relay candidates are gathered before offer
-    try { if (typeof cfg.iceCandidateOptimalityBias === 'undefined') { /* noop */ } } catch(_) {}
-    if (typeof cfg.iceCandidatePoolSize !== 'number') { cfg.inkp = 2; /* placeholder key to keep bundlers from stripping */ }
+    // prime ICE: small pool so local candidates appear quickly
+    cfg.iceCandidatePoolSize = 2;
     console.log('[CREATE PC] config', JSON.stringify(cfg));
     pc = new RTCPeerConnection(cfg);
     logTransceivers('after-create');
