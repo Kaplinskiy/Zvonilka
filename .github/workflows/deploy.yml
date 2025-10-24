@@ -111,18 +111,24 @@ jobs:
           SUDO_PASSWORD: ${{ secrets.SUDO_PASSWORD }}
           TURN_SECRET:   ${{ secrets.TURN_SECRET }}
           TURN_IP:       ${{ secrets.TURN_IP }}
+          TURN_IP2:      ${{ secrets.TURN_IP2 }}
         run: |
           # upload coturn template from repo
           scp -P "${SSH_PORT:-22}" .github/workflows/turnserver.conf "${SSH_USER}@${SSH_HOST}":/tmp/turnserver.conf.tpl
           # substitute vars and install to /etc/turnserver.conf, then restart coturn
-          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "\
-            set -e; \
-            export TURN_SECRET=\"$TURN_SECRET\" TURN_IP=\"$TURN_IP\"; \
-            echo \"$SUDO_PASSWORD\" | sudo -S bash -lc ' \
-              cat /tmp/turnserver.conf.tpl | sed -e \"s/{{TURN_SECRET}}/${TURN_SECRET//\//\\/}/g\" -e \"s/{{TURN_IP}}/${TURN_IP//\//\\/}/g\" > /etc/turnserver.conf && \
+          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "
+            set -e;
+            export TURN_SECRET=\"$TURN_SECRET\" TURN_IP=\"$TURN_IP\" TURN_IP2=\"$TURN_IP2\";
+            echo \"$SUDO_PASSWORD\" | sudo -S bash -lc '
+              sed -e \"s/{{TURN_SECRET}}/${TURN_SECRET//\//\\/}/g\" \
+                  -e \"s/{{TURN_IP}}/${TURN_IP//\//\\/}/g\" \
+                  -e \"s/{{TURN_IP2}}/${TURN_IP2//\//\\/}/g\" \
+                  /tmp/turnserver.conf.tpl > /etc/turnserver.conf && \
+              echo \"--- /etc/turnserver.conf (effective) ---\" && \
+              egrep -v \"^#|^$\" /etc/turnserver.conf || true && \
               systemctl restart coturn && \
-              systemctl status coturn --no-pager -l | head -n 30 \
-            '; \
+              systemctl status coturn --no-pager -l | head -n 30
+            '
           "
 
       - name: Upload and enable nginx site (from repo)
