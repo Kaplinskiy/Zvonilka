@@ -1,3 +1,4 @@
+
 // src/main.js
 import i18next from 'https://unpkg.com/i18next@23.11.5/dist/esm/i18next.js';
 import HttpBackend from 'https://unpkg.com/i18next-http-backend@2.6.2/esm/index.js';
