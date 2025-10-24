@@ -97,11 +97,15 @@ jobs:
         env:
           SUDO_PASSWORD: ${{ secrets.SUDO_PASSWORD }}
         run: |
-          scp -P "${SSH_PORT:-22}" .github/workflows/call.zababba.com.conf "${SSH_USER}@${SSH_HOST}":/tmp/call.zababba.com.conf
+          # upload site config from repo to a temp path on the server
+          scp -P "${SSH_PORT:-22}" .github/workflows/call.zababba.com.conf "${SSH_USER}@${SSH_HOST}":/tmp/call-final.conf
+          # move into place, replace the active site, and reload nginx non-interactively
           ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "\
             set -e; \
-            echo \"$SUDO_PASSWORD\" | sudo -S mv /tmp/call.zababba.com.conf /etc/nginx/sites-available/call.zababba.com.conf; \
-            echo \"$SUDO_PASSWORD\" | sudo -S ln -sfn /etc/nginx/sites-available/call.zababba.com.conf /etc/nginx/sites-enabled/call.zababba.com.conf; \
+            echo \"$SUDO_PASSWORD\" | sudo -S mv /tmp/call-final.conf /etc/nginx/sites-available/call-final.conf; \
+            # remove any older call* site links to avoid duplicate/conflicting server blocks
+            echo \"$SUDO_PASSWORD\" | sudo -S bash -lc 'rm -f /etc/nginx/sites-enabled/call*.conf || true'; \
+            echo \"$SUDO_PASSWORD\" | sudo -S ln -sfn /etc/nginx/sites-available/call-final.conf /etc/nginx/sites-enabled/call-final.conf; \
             echo \"$SUDO_PASSWORD\" | sudo -S nginx -t; \
             echo \"$SUDO_PASSWORD\" | sudo -S systemctl reload nginx; \
           "
