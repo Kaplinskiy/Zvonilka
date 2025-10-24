@@ -105,6 +105,26 @@ jobs:
             echo \"$SUDO_PASSWORD\" | sudo -S bash -lc 'printf "TURN_SECRET=%s\n" "$TURN_SECRET" > /etc/call-signal.env'; \
           "
 
+      - name: Host | install coturn config from repo
+        if: env.SSH_HOST != ''
+        env:
+          SUDO_PASSWORD: ${{ secrets.SUDO_PASSWORD }}
+          TURN_SECRET:   ${{ secrets.TURN_SECRET }}
+          TURN_IP:       ${{ secrets.TURN_IP }}
+        run: |
+          # upload coturn template from repo
+          scp -P "${SSH_PORT:-22}" .github/workflows/turnserver.conf "${SSH_USER}@${SSH_HOST}":/tmp/turnserver.conf.tpl
+          # substitute vars and install to /etc/turnserver.conf, then restart coturn
+          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "\
+            set -e; \
+            export TURN_SECRET=\"$TURN_SECRET\" TURN_IP=\"$TURN_IP\"; \
+            echo \"$SUDO_PASSWORD\" | sudo -S bash -lc ' \
+              cat /tmp/turnserver.conf.tpl | sed -e \"s/{{TURN_SECRET}}/${TURN_SECRET//\//\\/}/g\" -e \"s/{{TURN_IP}}/${TURN_IP//\//\\/}/g\" > /etc/turnserver.conf && \
+              systemctl restart coturn && \
+              systemctl status coturn --no-pager -l | head -n 30 \
+            '; \
+          "
+
       - name: Upload and enable nginx site (from repo)
         if: env.SSH_HOST != '' && env.DEPLOY_PATH != ''
         env:
