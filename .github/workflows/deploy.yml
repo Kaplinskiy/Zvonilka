@@ -145,12 +145,12 @@ jobs:
         env:
           SUDO_PASSWORD: ${{ secrets.SUDO_PASSWORD }}
         run: |
-          ssh -p "${SSH_PORT:-22}" -tt "${SSH_USER}@${SSH_HOST}" '
-            set -e
-            echo "$SUDO_PASSWORD" | sudo -S systemctl daemon-reload || true
-            echo "$SUDO_PASSWORD" | sudo -S systemctl restart '"${SERVICE_NAME}"'
-            echo "$SUDO_PASSWORD" | sudo -S systemctl status '"${SERVICE_NAME}"' --no-pager -l || true
-          '
+          ssh -p "${SSH_PORT:-22}" -tt "${SSH_USER}@${SSH_HOST}" "
+            set -e;
+            echo \"$SUDO_PASSWORD\" | sudo -S -p '' systemctl daemon-reload || true;
+            echo \"$SUDO_PASSWORD\" | sudo -S -p '' systemctl restart '${SERVICE_NAME}';
+            echo \"$SUDO_PASSWORD\" | sudo -S -p '' systemctl status '${SERVICE_NAME}' --no-pager -l || true;
+          "
 
       - name: Restart PM2 process (fallback if no systemd)
         if: env.SSH_HOST != ''
