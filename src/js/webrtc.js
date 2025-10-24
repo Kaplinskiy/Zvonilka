@@ -195,6 +195,7 @@
     // ICE events
     pc.onicecandidate = (e) => {
       if (e.candidate) {
+        try { console.log('[ICE-LOCAL]', e.candidate && e.candidate.candidate); } catch(_) {}
         log.ui('send ice');
         if (!NON_TRICKLE && wsReady() && typeof window.wsSend === 'function') {
           const init = e.candidate.toJSON ? e.candidate.toJSON() : e.candidate;
@@ -279,6 +280,21 @@
       const offer = await pc.createOffer({ offerToReceiveAudio: 1 });
       await pc.setLocalDescription(offer); console.log('[OFFER] setLocal ok; gather=', pc.iceGatheringState);
       await logSelectedPair('after-setLocal-offer');
+      // wait briefly for any local candidates to appear; if none, force a single ICE restart
+      let localsSeen = 0;
+      try {
+        const t0 = Date.now();
+        while (Date.now() - t0 < 1800) {
+          const s = await pc.getStats();
+          s.forEach(r => { if (r.type === 'local-candidate') localsSeen++; });
+          if (localsSeen > 0) break;
+          await delay(120);
+        }
+        if (localsSeen === 0) {
+          console.warn('[OFFER] no local candidates observed; restarting ICE');
+          try { pc.restartIce(); } catch(_) {}
+        }
+      } catch(_) {}
       if (NON_TRICKLE) await waitIceComplete(pc, 2500);
       await logSelectedPair('after-gather-offer');
       await dumpRtp('after-gather-offer');
@@ -324,6 +340,20 @@
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       await logSelectedPair('after-setLocal-answer');
+      // wait briefly for any local candidates to appear on callee; if none, restart ICE once
+      try {
+        let localsSeen = 0; const t0 = Date.now();
+        while (Date.now() - t0 < 1800) {
+          const s = await pc.getStats();
+          s.forEach(r => { if (r.type === 'local-candidate') localsSeen++; });
+          if (localsSeen > 0) break;
+          await delay(120);
+        }
+        if (localsSeen === 0) {
+          console.warn('[ANSWER] no local candidates observed; restarting ICE');
+          try { pc.restartIce(); } catch(_) {}
+        }
+      } catch(_) {}
       if (NON_TRICKLE) await waitIceComplete(pc, 2500);
       await logSelectedPair('after-gather-answer');
       await dumpRtp('after-gather-answer');
