@@ -16,7 +16,7 @@ app.use(express.json());
 // TURN dynamic credentials configuration (compatible with coturn REST API style)
 // Required: TURN_SECRET must match coturn's static-auth-secret for HMAC authentication.
 const TURN_SECRET = process.env.TURN_SECRET || '';
-const TURN_URLS = (process.env.TURN_URLS || 'turns:turn.zababba.com:5349?transport=tcp')
+const TURN_URLS = (process.env.TURN_URLS || 'turn.zababba.com')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
@@ -86,7 +86,10 @@ function issueTurnCreds(req, res) {
     const username = `${expiry}:${user}`;
     const credential = crypto.createHmac('sha1', TURN_SECRET).update(username).digest('base64');
     res.set('Cache-Control', 'no-store');
-    const urls = buildTurnUrls(TURN_URLS); // include both TURNS/TCP and TURN/UDP
+    const urls = [
+      'turns:turn.zababba.com:5349?transport=tcp',
+      'turn:turn.zababba.com:3478?transport=udp'
+    ];
     return res.json({
       iceServers: [{ urls, username, credential, credentialType: 'password' }],
       ttl: TURN_TTL,
