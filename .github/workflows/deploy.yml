@@ -94,15 +94,17 @@ jobs:
 
       - name: Upload and enable nginx site (from repo)
         if: env.SSH_HOST != '' && env.DEPLOY_PATH != ''
+        env:
+          SUDO_PASSWORD: ${{ secrets.SUDO_PASSWORD }}
         run: |
           scp -P "${SSH_PORT:-22}" .github/workflows/call.zababba.com.conf "${SSH_USER}@${SSH_HOST}":/tmp/call.zababba.com.conf
-          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" '
-            set -e
-            sudo mv /tmp/call.zababba.com.conf /etc/nginx/sites-available/call.zababba.com.conf
-            sudo ln -sfn /etc/nginx/sites-available/call.zababba.com.conf /etc/nginx/sites-enabled/call.zababba.com.conf
-            sudo nginx -t
-            sudo systemctl reload nginx
-          '
+          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "\
+            set -e; \
+            echo \"$SUDO_PASSWORD\" | sudo -S mv /tmp/call.zababba.com.conf /etc/nginx/sites-available/call.zababba.com.conf; \
+            echo \"$SUDO_PASSWORD\" | sudo -S ln -sfn /etc/nginx/sites-available/call.zababba.com.conf /etc/nginx/sites-enabled/call.zababba.com.conf; \
+            echo \"$SUDO_PASSWORD\" | sudo -S nginx -t; \
+            echo \"$SUDO_PASSWORD\" | sudo -S systemctl reload nginx; \
+          "
 
       # (Опционально) Перекатить статику атомарно через симлинк, если используется версияция релизов
       # Раскомментируй и адаптируй при необходимости
