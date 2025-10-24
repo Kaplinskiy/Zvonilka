@@ -117,20 +117,18 @@ jobs:
           scp -P "${SSH_PORT:-22}" .github/workflows/turnserver.conf "${SSH_USER}@${SSH_HOST}":/tmp/turnserver.conf.tpl
           # substitute vars and install to /etc/turnserver.conf, then restart coturn
           ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "
-            set -e;
-            TMP_CFG=\$(mktemp)
+            set -e
             RENDER_TPL=\$(mktemp)
+            OUT=/tmp/turnserver.rendered
             export TURN_SECRET TURN_IP TURN_IP2
-            # convert {{VAR}} -> \${VAR} for envsubst
-            sed -E 's/\{\{([A-Z0-9_]+)\}\}/\\\$\{\\1\}/g' /tmp/turnserver.conf.tpl > \"\$RENDER_TPL\"
-            envsubst < \"\$RENDER_TPL\" > \"\$TMP_CFG\"
-            echo \"$SUDO_PASSWORD\" | sudo -S bash -lc '
-              mv \"\$TMP_CFG\" /etc/turnserver.conf && \
-              echo \"--- /etc/turnserver.conf (effective) ---\" && \
-              egrep -v \"^#|^$\" /etc/turnserver.conf || true && \
-              systemctl restart coturn && \
-              systemctl status coturn --no-pager -l | head -n 30
-            '
+            # convert {{VAR}} -> ${VAR} for envsubst and render to a fixed temp path
+            sed -E 's/\{\{([A-Z0-9_]+)\}\}/\$\{\1\}/g' /tmp/turnserver.conf.tpl > \"$RENDER_TPL\"
+            envsubst < \"$RENDER_TPL\" > \"$OUT\"
+            echo \"$SUDO_PASSWORD\" | sudo -S install -m 0644 \"$OUT\" /etc/turnserver.conf
+            echo \"--- /etc/turnserver.conf (effective) ---\"
+            egrep -v '^#|^$' /etc/turnserver.conf || true
+            echo \"$SUDO_PASSWORD\" | sudo -S systemctl restart coturn
+            sudo systemctl status coturn --no-pager -l | head -n 30
           "
 
       - name: Upload and enable nginx site (from repo)
