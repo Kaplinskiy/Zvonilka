@@ -92,6 +92,19 @@ jobs:
             fi
           "
 
+      - name: Host | ensure dotenv and system env
+        if: env.SSH_HOST != '' && env.DEPLOY_PATH != ''
+        env:
+          SUDO_PASSWORD: ${{ secrets.SUDO_PASSWORD }}
+          TURN_SECRET:   ${{ secrets.TURN_SECRET }}
+        run: |
+          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "\
+            set -e; \
+            cd '${DEPLOY_PATH}'; \
+            if [ -f package.json ]; then npm i dotenv --save; fi; \
+            echo \"$SUDO_PASSWORD\" | sudo -S bash -lc 'printf "TURN_SECRET=%s\n" "$TURN_SECRET" > /etc/call-signal.env'; \
+          "
+
       - name: Upload and enable nginx site (from repo)
         if: env.SSH_HOST != '' && env.DEPLOY_PATH != ''
         env:
@@ -139,9 +152,9 @@ jobs:
             set -e; \
             cd '${DEPLOY_PATH}'; \
             if [ -f ecosystem.config.js ]; then \
-              pm2 start ecosystem.config.js --only call-signal || pm2 start ecosystem.config.js; \
+              pm2 start ecosystem.config.js --only call-signal --update-env || pm2 start ecosystem.config.js --update-env; \
             else \
-              pm2 restart call-signal || pm2 start server.js --name call-signal; \
+              pm2 restart call-signal --update-env || pm2 start server.js --name call-signal; \
             fi; \
             pm2 save || true; \
             pm2 status call-signal || true
