@@ -20,7 +20,7 @@ function buildIceConfig(){
         if (/^turns?:/i.test(raw)) {
           let after = raw.replace(/^turns?:\/{0,2}/i, ''); // drop scheme and // if present
           // handle accidental "turns:turns:host" → keep only host part after the first scheme
-          after = after.replace(/^turns:\/\//i, '').replace(/^turns:/i, '');
+          after = after.replace(/^turns?:\/\//i, '').replace(/^turns?:/i, '');
           let host = after.split(/[/?#:]/)[0].split(':')[0];
           if (!host) host = fallbackHost;
           out.add(`turns:${host}:5349?transport=tcp`);
