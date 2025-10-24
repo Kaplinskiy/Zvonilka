@@ -1,11 +1,3 @@
-import fs from 'fs';
-import dotenv from 'dotenv';
-// Load TURN_SECRET from system-wide env if exists
-if (fs.existsSync('/etc/call-signal.env')) {
-  dotenv.config({ path: '/etc/call-signal.env' });
-} else {
-  dotenv.config();
-}
 
 function buildIceConfig(){
     const t = (window && window.__TURN__) ? window.__TURN__ : {};
