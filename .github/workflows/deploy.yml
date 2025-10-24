@@ -142,8 +142,15 @@ jobs:
       # если укажешь SERVICE_NAME в секретах (например, "zvonilka-signal.service")
       - name: Restart signaling service (optional)
         if: env.SERVICE_NAME != '' && env.SSH_HOST != ''
+        env:
+          SUDO_PASSWORD: ${{ secrets.SUDO_PASSWORD }}
         run: |
-          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "sudo systemctl daemon-reload || true && sudo systemctl restart '${SERVICE_NAME}' && sudo systemctl status '${SERVICE_NAME}' --no-pager -l || true"
+          ssh -p "${SSH_PORT:-22}" -tt "${SSH_USER}@${SSH_HOST}" '
+            set -e
+            echo "$SUDO_PASSWORD" | sudo -S systemctl daemon-reload || true
+            echo "$SUDO_PASSWORD" | sudo -S systemctl restart '"${SERVICE_NAME}"'
+            echo "$SUDO_PASSWORD" | sudo -S systemctl status '"${SERVICE_NAME}"' --no-pager -l || true
+          '
 
       - name: Restart PM2 process (fallback if no systemd)
         if: env.SSH_HOST != ''
