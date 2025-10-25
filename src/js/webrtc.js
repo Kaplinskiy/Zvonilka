@@ -231,6 +231,7 @@
     pc.onnegotiationneeded = () => {
       const r = getRole();
       console.log('[NEGOTIATION] event role=', r, 'wsReady=', wsReady());
+      if (typeof window !== 'undefined' && ('__ALLOW_OFFER__' in window) && !window.__ALLOW_OFFER__) { console.log('[NEGOTIATION] blocked:not-allowed'); return; }
       if (r !== 'caller') {
         // Avoid spurious renegotiate on callee before remote offer is set
         if (r === 'callee' && pc && pc.remoteDescription) {
@@ -257,6 +258,8 @@
   }
 
   async function sendOfferIfPossible() {
+    // global gate: do not attempt an offer until main.js explicitly allows it (e.g., after 'ready')
+    if (typeof window !== 'undefined' && ('__ALLOW_OFFER__' in window) && !window.__ALLOW_OFFER__) { console.log('[OFFER-GUARD] block:not-allowed'); return; }
     if (offerRetryTimer) { console.log('[OFFER] retry already scheduled'); return; }
 
     // ensure we have a PeerConnection ready (await async createPC)
