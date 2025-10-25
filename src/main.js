@@ -367,6 +367,7 @@ function renderLangSwitch(active) {
 let pendingOffer = null;
 let answerInProgress = false;
 let offerAttempted = false;
+let calleeArmed = false;
 
   // Direct one-shot initial offer sender (avoids timeouts in trigger)
   async function sendInitialOfferOnce(maxWaitMs = 3000) {
@@ -496,8 +497,7 @@ let offerAttempted = false;
             role = msg.role; window.role = role; setRoleLabel(role === 'caller');
             try { console.debug('[HELLO] role set from server =', role); } catch {}
           }
-
-          try { await autoAnswerIfReady(); } catch {}
+          // Auto-answer call removed as requested
           break;
         }
         case 'member.joined': {
@@ -535,10 +535,30 @@ let offerAttempted = false;
             } catch {}
             try { window.__OFFER_SENT__ = false; } catch {}
             offerAttempted = false;
-            await window.sendOfferIfPossible();
-            logT('webrtc', 'webrtc.offer_sent_caller');
+            // ждём явного сигнала 'ready' от callee; оффер уйдёт в case 'ready'
           } catch (e) {
             logT('error', 'error.offer_send_failed', { msg: (e?.message || String(e)) });
+          }
+          break;
+        }
+        case 'ready': {
+          if (role !== 'caller') { break; }
+          try {
+            await waitTurnReady();
+            await getMic();
+            if (!window.getPC || !window.getPC()) {
+              await createPC(async (s) => {
+                if (audioEl) { audioEl.muted = false; audioEl.srcObject = s; try { await audioEl.play(); } catch {} }
+                bindRemoteStream(s);
+                try { await startAudioViz(s); } catch {}
+                logT('webrtc','webrtc.remote_track');
+              });
+            }
+            offerAttempted = false;
+            await window.sendOfferIfPossible();
+            logT('webrtc','webrtc.offer_sent_caller');
+          } catch (e) {
+            logT('error','error.offer_send_failed',{ msg: (e?.message||String(e)) });
           }
           break;
         }
@@ -552,15 +572,35 @@ let offerAttempted = false;
           window.__PENDING_OFFER = pendingOffer;
           window.__LAST_OFFER = pendingOffer; // debug: allow manual accept from console
 
-          // Always show the Answer button; do NOT auto-accept to avoid races
+          // показать кнопку; если callee нажал "Начать разговор" — принять сразу
           if (btnAnswer) btnAnswer.classList.remove('hidden');
-          setStatusKey('call.offer_received_click_answer', 'warn');
-          await autoAnswerIfReady();
-
-          if (pendingOffer) {
-            setStatusKey('call.offer_received_click_answer', 'warn');
+          if (calleeArmed) {
+            try {
+              await waitTurnReady();
+              await getMic();
+              if (!window.getPC || !window.getPC()) {
+                await createPC(async (s) => {
+                  if (audioEl) { audioEl.muted = false; audioEl.srcObject = s; try { await audioEl.play(); } catch {} }
+                  bindRemoteStream(s);
+                  try { await startAudioViz(s); } catch {}
+                  logT('webrtc','webrtc.remote_track');
+                });
+              }
+              await acceptIncoming(pendingOffer, async (s) => {
+                if (audioEl) { audioEl.muted = false; audioEl.srcObject = s; try { await audioEl.play(); } catch {} }
+                bindRemoteStream(s);
+                try { await startAudioViz(s); } catch {}
+                logT('webrtc','webrtc.remote_track');
+              });
+              pendingOffer = null;
+              if (btnHang) btnHang.disabled = false;
+              setStatusKey('common.ready', 'ok');
+            } catch (e) {
+              console.warn('[CALLEE] accept failed', e && (e.message || String(e)));
+              setStatusKey('signal.waiting_offer', 'warn');
+            }
           } else {
-            setStatusKey('signal.waiting_offer', 'warn');
+            setStatusKey('call.offer_received_click_answer', 'warn');
           }
           break;
         }
@@ -831,10 +871,8 @@ let offerAttempted = false;
       if (!isWSOpen()) await connectWS('callee', roomId, onSignal);
       // If TURN loader exists, kick it so we don't create PC with empty ICE later
       try { await (window.__TURN_PROMISE__ || Promise.resolve()); } catch {}
-      await autoAnswerIfReady();
-      if (!pendingOffer && !window.__PENDING_OFFER && !window.__LAST_OFFER) {
-        setStatusKey('signal.waiting_offer', 'warn');
-      }
+      // ждать оффер от caller; ответ пойдёт после нажатия кнопки или сигнала 'ready'
+      setStatusKey('signal.waiting_offer', 'warn');
     } catch (e) {
       try { console.warn('[INIT callee] failed to connect/auto-answer:', e && (e.message || String(e))); } catch {}
     }
@@ -858,18 +896,6 @@ let offerAttempted = false;
       // 2) подключить WS
       await connectWS('caller', roomId, onSignal);
 
-      // 3) подготовить медиа и PC
-      await (window.__TURN_PROMISE__ || Promise.resolve()).catch(()=>{});
-      await waitTurnReady();
-      await getMic();
-      await createPC(async (s) => {
-        if (audioEl) { audioEl.muted = false; audioEl.srcObject = s; try { await audioEl.play(); } catch {} }
-        bindRemoteStream(s);
-        try { await startAudioViz(s); } catch {}
-        logT('webrtc', 'webrtc.remote_track');
-      });
-
-      // 4) отправить оффер
       if (btnHang) btnHang.disabled = false;
       setStatusKey('room.ready_share_link', 'ok');
     } catch (e) {
@@ -888,12 +914,9 @@ let offerAttempted = false;
     }
     role = 'callee'; window.role = 'callee'; roomId = rid;
     if (!isWSOpen()) await connectWS('callee', roomId, onSignal);
-    // пробуем автоответ, если оффер уже пришёл
-    await autoAnswerIfReady();
-    // если оффера ещё нет — явно показываем ожидание
-    if (!pendingOffer && !window.__PENDING_OFFER && !window.__LAST_OFFER) {
-      setStatusKey('signal.waiting_offer', 'warn');
-    }
+    calleeArmed = true;
+    setStatusKey('signal.waiting_offer', 'warn');
+    try { wsSend('ready'); } catch {}
   };
 
   // Handler for "Hang Up" button: clean up the call.
