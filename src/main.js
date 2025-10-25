@@ -818,13 +818,26 @@ let offerAttempted = false;
       setRoleLabel(true);
       return;
     }
-    role = 'callee';
-    roomId = rid;
-    roomId = roomId ? String(roomId).replace(/[^A-Za-z0-9_-]/g, '') : roomId;
+    // Callee auto-init
+    role = 'callee'; window.role = 'callee';
+    roomId = String(rid).replace(/[^A-Za-z0-9_-]/g, '');
     setRoleLabel(false);
-    setStatusKey('ws.waiting_offer', 'ok');
     if (btnAnswer) btnAnswer.classList.remove('hidden');
-    if (btnCall) btnCall.classList.add('hidden');
+    if (btnCall)   btnCall.classList.add('hidden');
+    setStatusKey('ws.waiting_offer', 'ok');
+
+    // Ensure WS is connected for callee and try immediate auto-answer if offer already arrived
+    try {
+      if (!isWSOpen()) await connectWS('callee', roomId, onSignal);
+      // If TURN loader exists, kick it so we don't create PC with empty ICE later
+      try { await (window.__TURN_PROMISE__ || Promise.resolve()); } catch {}
+      await autoAnswerIfReady();
+      if (!pendingOffer && !window.__PENDING_OFFER && !window.__LAST_OFFER) {
+        setStatusKey('signal.waiting_offer', 'warn');
+      }
+    } catch (e) {
+      try { console.warn('[INIT callee] failed to connect/auto-answer:', e && (e.message || String(e))); } catch {}
+    }
   }
 
   // --- BUTTON EVENT HANDLERS ---
