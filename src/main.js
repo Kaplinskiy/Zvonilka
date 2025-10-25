@@ -552,10 +552,11 @@ let offerAttempted = false;
           window.__PENDING_OFFER = pendingOffer;
           window.__LAST_OFFER = pendingOffer; // debug: allow manual accept from console
 
-          await autoAnswerIfReady();
-
           // Always show the Answer button; do NOT auto-accept to avoid races
           if (btnAnswer) btnAnswer.classList.remove('hidden');
+          setStatusKey('call.offer_received_click_answer', 'warn');
+          await autoAnswerIfReady();
+
           if (pendingOffer) {
             setStatusKey('call.offer_received_click_answer', 'warn');
           } else {
@@ -856,13 +857,29 @@ let offerAttempted = false;
       });
 
       // 4) отправить оффер
-      await sendOfferIfPossible();
       if (btnHang) btnHang.disabled = false;
       setStatusKey('room.ready_share_link', 'ok');
     } catch (e) {
       console.warn('[CALLER] start failed:', e && (e.message || String(e)));
       setStatusKey(i18next.t('error.room_create_failed'), 'err');
       btnCall.disabled = false;
+    }
+  };
+
+  if (btnAnswer) btnAnswer.onclick = async () => {
+    const rid = parseRoom();
+    if (!rid) {
+      alert(i18next.t('room.open_invite_with_param'));
+      logT('warn', 'warn.ws_already_connected_callee');
+      return;
+    }
+    role = 'callee'; window.role = 'callee'; roomId = rid;
+    if (!isWSOpen()) await connectWS('callee', roomId, onSignal);
+    // пробуем автоответ, если оффер уже пришёл
+    await autoAnswerIfReady();
+    // если оффера ещё нет — явно показываем ожидание
+    if (!pendingOffer && !window.__PENDING_OFFER && !window.__LAST_OFFER) {
+      setStatusKey('signal.waiting_offer', 'warn');
     }
   };
 
