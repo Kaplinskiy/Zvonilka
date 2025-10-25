@@ -15,6 +15,7 @@
   /** @type {boolean} */ let offerInProgress = false;
   /** @type {boolean} */ let negotiationScheduled = false;
   /** @type {number|null} */ let offerRetryTimer = null;
+  /** @type {boolean} */ let offerPrepared = false; // localDescription is set, wait to send after candidates
   /** @type {RTCIceCandidateInit[]} */ const remoteIceQueue = (Array.isArray(window.__REMOTE_ICE_Q) ? window.__REMOTE_ICE_Q : (window.__REMOTE_ICE_Q = []));
 
   const NON_TRICKLE = false; // send full SDP after gathering (helps avoid one‑way audio on relay)
@@ -211,6 +212,23 @@
       if (pc.iceGatheringState === 'complete') {
         log.ui('ICE gathering complete');
         try { await pc.addIceCandidate(null); } catch (_) {}
+        // If we are caller and offer was prepared, send it now only when allowed and candidates present
+        try {
+          const r = getRole();
+          const allowed = (typeof window !== 'undefined' && ('__ALLOW_OFFER__' in window) && window.__ALLOW_OFFER__);
+          const ld = pc && pc.localDescription;
+          const hasCands = !!(ld && ld.sdp && /\ba=candidate:/m.test(ld.sdp));
+          if (r === 'caller' && wsReady() && allowed && offerPrepared && !offerSent && hasCands) {
+            console.log('[OFFER] send after gather complete, candidates present');
+            if (typeof window.wsSend === 'function') {
+              window.wsSend('offer', { type: 'offer', sdp: ld.sdp });
+              offerSent = true; offerPrepared = false; window.__SEND_OFFER_ONCE__ = true; log.ui('send offer');
+              if (offerRetryTimer) { clearTimeout(offerRetryTimer); offerRetryTimer = null; }
+            }
+          } else {
+            console.log('[OFFER] not sending yet (gate/ws/candidates)', { role: r, ws: wsReady(), allowed, offerPrepared, hasCands });
+          }
+        } catch (_) {}
       }
       logSelectedPair('gathering:' + pc.iceGatheringState);
     };
@@ -308,22 +326,14 @@
       if (NON_TRICKLE) await waitIceComplete(pc, 2500);
       await logSelectedPair('after-gather-offer');
       await dumpRtp('after-gather-offer');
-      // Explicitly signal end-of-candidates as a safety net
+      // mark offer prepared; actual wsSend will occur on ice-gathering complete when candidates exist and gate is open
       try { await pc.addIceCandidate(null); } catch(_) {}
-      // Log how many candidates we packed into SDP
+      offerPrepared = true;
       try {
         const candLines = (offer.sdp || '').split('\r\n').filter(l => l.startsWith('a=candidate'));
-        console.log('[OFFER] local candidates in SDP:', candLines.length, candLines.slice(0,5));
+        console.log('[OFFER] local candidates in SDP (prelim):', candLines.length, candLines.slice(0,5));
       } catch(_) {}
-      const final = pc.localDescription || offer;
-      console.log('[OFFER] wsSend offer');
-      if (typeof window.wsSend === 'function') {
-        window.wsSend('offer', { type: 'offer', sdp: final.sdp });
-        offerSent = true; window.__SEND_OFFER_ONCE__ = true; log.ui('send offer');
-        if (offerRetryTimer) { clearTimeout(offerRetryTimer); offerRetryTimer = null; }
-      } else {
-        console.warn('[OFFER] wsSend missing; cannot transmit');
-      }
+      console.log('[OFFER] prepared; will send after gather-complete when allowed');
     } catch (e) {
       offerSent = false; console.error('[OFFER] error', e);
     } finally {

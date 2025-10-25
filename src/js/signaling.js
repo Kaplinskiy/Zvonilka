@@ -15,6 +15,11 @@
   let _ws = null;
   let _pingTimer = null;
 
+  function getIds() {
+    try { return { roomId: window.__WS_ROOM__ || null, clientId: window.__CLIENT_ID || null }; }
+    catch { return { roomId: null, clientId: null }; }
+  }
+
   // Expose live socket on window for other modules (main/webrtc)
   try {
     if (typeof window !== 'undefined') {
@@ -123,7 +128,7 @@ function connectWS(role, roomId, onMessage) {
      * Handles automatic reconnection logic on unexpected closures.
      */
     const openSocket = () => {
-      const q = new URLSearchParams({ roomId: roomId, role }).toString();
+      const q = new URLSearchParams({ roomId: roomId, role, clientId: (window.__CLIENT_ID || '') }).toString();
       const url = `${CFG.WS_URL}?${q}`;
       window.addLog && window.addLog('signal', `connect WS ${url}`);
 
@@ -171,6 +176,16 @@ function connectWS(role, roomId, onMessage) {
         } catch {}
         try { window.__SIG_HOOK && window.__SIG_HOOK(msg); } catch {}
 
+        // Drop messages for other clients or from stale sockets
+        try {
+          if (msg && typeof msg === 'object' && msg.toClientId && window.__CLIENT_ID && msg.toClientId !== window.__CLIENT_ID) {
+            return; // not for this client
+          }
+          if (window.__WS__ && _ws !== window.__WS__) {
+            return; // message from stale socket instance
+          }
+        } catch {}
+
         // Ignore ping messages from server
         if (typeof msg === 'object' && msg && msg.type === 'ping') {
           window.addLog && window.addLog('signal', 'recv ping');
@@ -190,6 +205,7 @@ function connectWS(role, roomId, onMessage) {
       };
 
       _ws.onclose = (e) => {
+        if (window.__WS__ && _ws !== window.__WS__) { return; }
         window.addLog && window.addLog('signal', `ws close code=${e.code} reason=${e.reason || '-'}`);
         if (_pingTimer) { clearInterval(_pingTimer); _pingTimer = null; }
         try {
@@ -281,6 +297,12 @@ function connectWS(role, roomId, onMessage) {
         // Generic: keep legacy payload wrapper for other message types
         out = payload ? { type, payload } : { type };
       }
+
+      try {
+        const ids = getIds();
+        if (ids.roomId) out.roomId = ids.roomId;
+        if (ids.clientId) out.clientId = ids.clientId;
+      } catch {}
 
       _ws.send(JSON.stringify(out));
       try { window.addLog && window.addLog('signal', `send ${type}`); } catch {}

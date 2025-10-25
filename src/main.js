@@ -365,6 +365,7 @@ function renderLangSwitch(active) {
   // expose role to webrtc (it reads window.role)
   window.role = null;
   window.__ALLOW_OFFER__ = false;
+  window.__CLIENT_ID = (Date.now().toString(36) + '-' + Math.random().toString(36).slice(2));
 let pendingOffer = null;
 let answerInProgress = false;
 let offerAttempted = false;
@@ -518,6 +519,9 @@ let calleeArmed = false;
         case 'ready': {
           if (role !== 'caller') { break; }
           try {
+            if (typeof window.loadTurnConfig === 'function') {
+              try { await window.loadTurnConfig(true); } catch {}
+            }
             window.__ALLOW_OFFER__ = true;
             await waitTurnReady();
             await getMic();
@@ -551,6 +555,9 @@ let calleeArmed = false;
           if (btnAnswer) btnAnswer.classList.remove('hidden');
           if (calleeArmed) {
             try {
+              if (typeof window.loadTurnConfig === 'function') {
+                try { await window.loadTurnConfig(true); } catch {}
+              }
               await waitTurnReady();
               await getMic();
               if (!window.getPC || !window.getPC()) {
@@ -776,6 +783,11 @@ let calleeArmed = false;
    */
   function doCleanup(reason = 'user-hangup') {
     try { window.__OFFER_SENT__ = false; } catch {}
+    // reset session gates and TURN cache
+    try { window.__ALLOW_OFFER__ = false; } catch {}
+    try { delete window.__TURN__; delete window.__TURN_PROMISE__; } catch {}
+    calleeArmed = false;
+    pendingOffer = null;
     // Guard: ignore premature peer-bye while PC not established
     // в main.js, в начале doCleanup
     console.debug('[CLEANUP]', reason,
@@ -889,9 +901,13 @@ let calleeArmed = false;
     }
     role = 'callee'; window.role = 'callee'; roomId = rid;
     if (!isWSOpen()) await connectWS('callee', roomId, onSignal);
+    if (typeof window.loadTurnConfig === 'function') {
+      try { await window.loadTurnConfig(true); } catch {}
+    }
+    await waitTurnReady();
     calleeArmed = true;
     setStatusKey('signal.waiting_offer', 'warn');
-    try { wsSend('ready'); } catch {}
+    try { wsSend('ready', { roomId, clientId: window.__CLIENT_ID }); } catch {}
   };
 
   // Handler for "Hang Up" button: clean up the call.
@@ -953,6 +969,13 @@ let calleeArmed = false;
       : i18next.t('common.ready');
   };
 
+  window.addEventListener('beforeunload', () => {
+    try { wsSend('bye', { reason: 'page-unload', roomId, clientId: window.__CLIENT_ID }); } catch {}
+    try { wsClose(); } catch {}
+    try { cleanupRTC('unload'); } catch {}
+    try { delete window.__TURN__; delete window.__TURN_PROMISE__; } catch {}
+    window.__ALLOW_OFFER__ = false;
+  });
   setStatusKey('status.initializing');
   try { renderEnv(); } catch {}
   logT('info', 'dev.client_loaded_vite');
