@@ -118,7 +118,10 @@
         return await getFreshTurn();
       }
       console.log('[WEBRTC] fresh TURN creds loaded', cfg);
-      if (typeof window !== 'undefined') window.__TURN__ = cfg;
+      if (typeof window !== 'undefined') {
+        const prev = window.__TURN__ || {};
+        window.__TURN__ = Object.assign({}, prev, cfg);
+      }
       return cfg;
     } catch (e) {
       console.error('[WEBRTC] failed to fetch TURN creds', e);
@@ -173,6 +176,8 @@
     }
     const cfg = { iceServers: t.iceServers };
     if (t.forceRelay) cfg.iceTransportPolicy = 'relay';
+    // Ensure policy visibility in logs
+    try { console.log('[ICE CONFIG POLICY]', cfg.iceTransportPolicy || 'all'); } catch (_) {}
     try { console.log('[ICE CONFIG DEBUG]', JSON.stringify(cfg, null, 2)); } catch (_) {}
     return cfg;
   }
