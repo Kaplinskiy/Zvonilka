@@ -364,6 +364,7 @@ function renderLangSwitch(active) {
   let roomId = null, memberId = null, role = null, pingTimer = null;
   // expose role to webrtc (it reads window.role)
   window.role = null;
+  window.__ALLOW_OFFER__ = false;
 let pendingOffer = null;
 let answerInProgress = false;
 let offerAttempted = false;
@@ -505,34 +506,7 @@ let calleeArmed = false;
             console.log('[DEBUG] member.joined, role=', role);
             logT('signal', 'debug.signal_recv_member_joined');
             if (typeof role === 'string' && role !== 'caller') { break; }
-            // Ensure TURN + mic + stable PC, then delegate to offer helper
-            await waitTurnReady();
-            await getMic();
-            // Ensure PC exists; create on demand if missing (awaited)
-            if (!window.getPC || !window.getPC()) {
-              console.debug('[CALLER] creating PC on demand in member.joined (await)');
-              await createPC(async (s) => {
-                if (audioEl) {
-                  audioEl.muted = false;
-                  audioEl.srcObject = s;
-                  try { await audioEl.play(); } catch {}
-                }
-                bindRemoteStream(s);
-                try { await startAudioViz(s); } catch {}
-                logT('webrtc', 'webrtc.remote_track');
-              });
-            }
-            try {
-              const t0 = Date.now();
-              while (Date.now() - t0 < 3000) {
-                const pcw = (window.getPC && window.getPC());
-                const st = pcw && pcw.signalingState;
-                if (pcw && (!st || st === 'stable' || st === 'have-local-offer')) break;
-                await new Promise(r => setTimeout(r, 100));
-              }
-              const pcw2 = (window.getPC && window.getPC());
-              console.debug('[MEMBER.JOINED] pc state before offer =', pcw2 && pcw2.signalingState);
-            } catch {}
+            // caller: ждём явного сигнала 'ready' от callee; не готовим PC/медиа здесь
             try { window.__OFFER_SENT__ = false; } catch {}
             offerAttempted = false;
             // ждём явного сигнала 'ready' от callee; оффер уйдёт в case 'ready'
@@ -544,6 +518,7 @@ let calleeArmed = false;
         case 'ready': {
           if (role !== 'caller') { break; }
           try {
+            window.__ALLOW_OFFER__ = true;
             await waitTurnReady();
             await getMic();
             if (!window.getPC || !window.getPC()) {
