@@ -85,11 +85,11 @@ function issueTurnCreds(req, res) {
     const expiry = Math.floor(Date.now() / 1000) + TURN_TTL;
     const username = `${expiry}:${user}`;
     const credential = crypto.createHmac('sha1', TURN_SECRET).update(username).digest('base64');
+
+    // Respect env and normalize to canonical TCP+UDP list
+    const urls = buildTurnUrls(TURN_URLS);
+
     res.set('Cache-Control', 'no-store');
-    const urls = [
-      'turns:turn.zababba.com:5349?transport=tcp',
-      'turn:turn.zababba.com:3478?transport=udp'
-    ];
     return res.json({
       iceServers: [{ urls, username, credential, credentialType: 'password' }],
       ttl: TURN_TTL,
@@ -102,6 +102,9 @@ function issueTurnCreds(req, res) {
 app.get('/turn-credentials', issueTurnCreds);
 // compatibility alias for older clients
 app.get('/signal/turn-credentials', issueTurnCreds);
+
+// readiness/liveness probe
+app.get('/healthz', (_req, res) => res.json({ ok: true }));
 
 const server = http.createServer(app);
 
@@ -134,7 +137,13 @@ function removeFromRoom(ws) {
   const set = rooms.get(roomId);
   if (!set) return;
   set.delete(ws);
-  if (set.size === 0) rooms.delete(roomId);
+  if (set.size === 0) {
+    rooms.delete(roomId);
+    // full cleanup to avoid leaks
+    roomPeers.delete(roomId);
+    iceBuffers.delete(roomId);
+    offerBuffers.delete(roomId);
+  }
 }
 
 // Broadcast a JSON message to all clients in a room except optionally one WebSocket client.

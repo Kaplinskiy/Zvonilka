@@ -28,47 +28,58 @@ if (typeof window !== 'undefined') {
 }
 
 // Load TURN configuration asynchronously (TCP-only relay)
-async function loadTurnConfig() {
+async function loadTurnConfig(force = false) {
+  const url = '/signal/turn-credentials';
   try {
-    const base = (window.__APP_CONFIG__ && window.__APP_CONFIG__.SERVER_URL) || '';
-    const url = base ? `${String(base).replace(/\/+$/,'')}/signal/turn-credentials` : '/signal/turn-credentials';
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) {
-      console.warn('[WEBRTC] loadTurnConfig: failed to fetch TURN credentials, status:', res.status);
-      const cfg = {
-        iceServers: [{ urls: ['turns:turn.zababba.com:5349?transport=tcp','turn:turn.zababba.com:3478?transport=udp'], username: '', credential: '', credentialType: 'password' }],
-        forceRelay: true,
-        expiresAt: Date.now() + 120000
-      };
-      window.__TURN__ = cfg;
-      return cfg;
+    // если уже есть валидный набор и не просили принудительно — вернём его
+    if (!force && window.__TURN__ && Array.isArray(window.__TURN__.iceServers) && window.__TURN__.iceServers.length) {
+      return window.__TURN__;
     }
-    const data = await res.json();
-    const urls = [
-      'turns:turn.zababba.com:5349?transport=tcp',
-      'turn:turn.zababba.com:3478?transport=udp'
-    ];
-    const iceServers = [{
-      urls,
-      username: data.iceServers && data.iceServers[0] ? (data.iceServers[0].username || '') : (data.username || ''),
-      credential: data.iceServers && data.iceServers[0] ? (data.iceServers[0].credential || '') : (data.credential || ''),
-      credentialType: 'password'
-    }];
-    const cfg = { iceServers, forceRelay: true, expiresAt: data.expiresAt || 0 };
-    window.__TURN__ = cfg;
-    console.log('TURN config loaded (TCP+UDP relay)', cfg);
-    return cfg;
-  } catch (err) {
-    console.warn('[WEBRTC] loadTurnConfig: error fetching TURN credentials', err);
-    const cfg = {
-      iceServers: [{ urls: ['turns:turn.zababba.com:5349?transport=tcp','turn:turn.zababba.com:3478?transport=udp'], username: '', credential: '', credentialType: 'password' }],
+    const r = await fetch(url, { cache: 'no-store', credentials: 'same-origin' });
+    if (!r.ok) throw new Error('turn fetch ' + r.status);
+    const j = await r.json();
+    const now = Math.floor(Date.now() / 1000);
+    const expiresAt = Number(j.expiresAt || 0);
+    const ice = Array.isArray(j.iceServers) ? j.iceServers : [];
+
+    // нормализация URL и жёсткий набор (без «turns:turn:...» дубликатов)
+    const norm = ice.map(s => ({
+      urls: (Array.isArray(s.urls) ? s.urls : [s.urls]).filter(Boolean).map(u => {
+        const str = String(u).trim();
+        if (/^turns?:/i.test(str)) return str;
+        const host = str.replace(/^https?:\/\//i,'').split(/[/?#:]/)[0];
+        return `turns:${host || 'turn.zababba.com'}:5349?transport=tcp`;
+      }),
+      username: s.username,
+      credential: s.credential,
+      credentialType: s.credentialType || 'password'
+    }));
+
+    window.__TURN__ = {
+      iceServers: norm,
       forceRelay: true,
-      expiresAt: Date.now() + 120000
+      issuedAt: now,
+      expiresAt: expiresAt || 0
     };
-    window.__TURN__ = cfg;
-    return cfg;
+    console.log('TURN config loaded (authoritative)', window.__TURN__);
+    return window.__TURN__;
+  } catch (e) {
+    console.warn('[WEBRTC] loadTurnConfig failed, using last or fallback', e && (e.message || e));
+    if (window.__TURN__ && Array.isArray(window.__TURN__.iceServers) && window.__TURN__.iceServers.length) return window.__TURN__;
+    // минимальный фоллбек, если нет вообще ничего
+    window.__TURN__ = {
+      iceServers: [
+        { urls: ['turns:turn.zababba.com:5349?transport=tcp', 'turn:turn.zababba.com:3478?transport=udp'] }
+      ],
+      forceRelay: true,
+      issuedAt: Math.floor(Date.now()/1000),
+      expiresAt: 0
+    };
+    return window.__TURN__;
   }
 }
+
 if (typeof window !== 'undefined') {
-  window.__TURN_PROMISE__ = loadTurnConfig().catch(() => ({}));
+  window.loadTurnConfig = loadTurnConfig;
 }
+

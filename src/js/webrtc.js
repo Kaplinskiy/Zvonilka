@@ -17,6 +17,8 @@
   /** @type {number|null} */ let offerRetryTimer = null;
   /** @type {boolean} */ let offerPrepared = false; // localDescription is set, wait to send after candidates
   /** @type {RTCIceCandidateInit[]} */ const remoteIceQueue = (Array.isArray(window.__REMOTE_ICE_Q) ? window.__REMOTE_ICE_Q : (window.__REMOTE_ICE_Q = []));
+  /** @type {Set<string>} */ const sentLocalIce = new Set();
+  /** @type {boolean} */ let endOfCandidatesSent = false;
 
   const NON_TRICKLE = false; // send full SDP after gathering (helps avoid one‑way audio on relay)
 
@@ -197,14 +199,23 @@
     pc.onicecandidate = (e) => {
       if (e.candidate) {
         try { console.log('[ICE-LOCAL]', e.candidate && e.candidate.candidate); } catch(_) {}
+        const init = e.candidate.toJSON ? e.candidate.toJSON() : e.candidate;
+        const key = (init.candidate || JSON.stringify(init));
+        if (sentLocalIce.has(key)) {
+          // skip duplicates
+          return;
+        }
+        sentLocalIce.add(key);
         log.ui('send ice');
         if (!NON_TRICKLE && wsReady() && typeof window.wsSend === 'function') {
-          const init = e.candidate.toJSON ? e.candidate.toJSON() : e.candidate;
           window.wsSend('ice', init);
         }
       } else {
-        log.ui('ice end');
-        if (!NON_TRICKLE && typeof window.wsSend === 'function') window.wsSend('ice', null);
+        if (!endOfCandidatesSent) {
+          endOfCandidatesSent = true;
+          log.ui('ice end');
+          if (!NON_TRICKLE && typeof window.wsSend === 'function') window.wsSend('ice', null);
+        }
       }
     };
     pc.onicegatheringstatechange = async () => {
@@ -420,7 +431,10 @@
   function cleanup(reason = '') {
     try {
       if (pc) { pc.close(); pc = null; }
-      localStream = null; offerSent = false; offerInProgress = false; negotiationScheduled = false; remoteIceQueue.length = 0;
+      localStream = null;
+      sentLocalIce.clear();
+      endOfCandidatesSent = false;
+      offerSent = false; offerInProgress = false; negotiationScheduled = false; remoteIceQueue.length = 0;
       window.addLog && window.addLog('info', 'cleanup ' + (reason || ''));
     } catch (_) {}
   }
