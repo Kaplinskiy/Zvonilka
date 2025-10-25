@@ -497,7 +497,7 @@ let offerAttempted = false;
             try { console.debug('[HELLO] role set from server =', role); } catch {}
           }
 
-          // Do NOT send offer on hello; wait for member.joined/peer.joined to ensure the peer is present.
+          try { await autoAnswerIfReady(); } catch {}
           break;
         }
         case 'member.joined': {
