@@ -588,68 +588,29 @@ let calleeArmed = false;
         }
         case 'answer': {
           logT('signal', 'debug.signal_recv_answer');
-          // Support {type:'answer', sdp} or legacy {payload|answer}
-          const _sdpAns = msg?.sdp || msg?.payload?.sdp || null;
-          const ans = _sdpAns ? { type: 'answer', sdp: _sdpAns } : (msg.payload || msg.answer);
-          // --- Debugging for incoming answers ---
-          window.__LAST_ANSWER_RAW = msg;    // debug
-          window.__LAST_ANSWER = ans;        // debug
-          try { console.debug('[ANSWER-IN]', ans); } catch {}
-          // Apply answer only on the caller; callee already set its local answer
-          if (role !== 'caller') { break; }
-          // -------------------------------------
-          if (ans) {
-            const pc = (window.getPC && window.getPC()) || (window.__WEBRTC__ && window.__WEBRTC__.getPC && window.__WEBRTC__.getPC());
-            let attempts = 0;
-            const tryApply = async () => {
-              attempts++;
-              try {
-                const st = pc && pc.signalingState;
-                // Prefer to apply when local offer is set
-                if (!pc || (st && st.startsWith('have-local-')) || attempts > 10) {
-                  await applyAnswer(ans);
-                  // --- Immediate ICE diagnostics and quick nudge after answer ---
-                  try {
-                    const pcDbg = (window.getPC && window.getPC());
-                    try { window.addLog && window.addLog('webrtc', 'sig=' + (pcDbg && pcDbg.signalingState)); } catch {}
-                    try { window.addLog && window.addLog('webrtc', 'ice=' + (pcDbg && pcDbg.iceConnectionState)); } catch {}
-                    try { window.addLog && window.addLog('webrtc', 'state=' + (pcDbg && pcDbg.connectionState)); } catch {}
-                    setTimeout(() => {
-                      try {
-                        const pc2 = (window.getPC && window.getPC());
-                        if (pc2 && pc2.iceConnectionState === 'new') {
-                          window.addLog && window.addLog('webrtc', 'restartIce (still new after answer)');
-                          pc2.restartIce();
-                        }
-                      } catch {}
-                    }, 300);
-                  } catch {}
-                  // Flush any last ICE candidates captured by WS hook
-                  try {
-                    const pc2 = (window.getPC && window.getPC()) || (window.__WEBRTC__ && window.__WEBRTC__.getPC && window.__WEBRTC__.getPC());
-                    const recent = (window.__SIGLOG || []).filter(m => m && m.type === 'ice' && typeof m.candidate === 'string').slice(-8);
-                    for (const m of recent) {
-                      try { await addRemoteIce({ candidate: m.candidate }); } catch {}
-                    }
-                  } catch {}
-                  // Nudge ICE to pick up TCP-only candidates
-                  try {
-                    const pc2 = (window.getPC && window.getPC()) || (window.__WEBRTC__ && window.__WEBRTC__.getPC && window.__WEBRTC__.getPC());
-                    pc2 && pc2.restartIce && pc2.restartIce();
-                  } catch {}
-                  return true;
-                }
-              } catch (e) {
-                if (attempts > 10) {
-                  try { console.error('[applyAnswer error]', e, ans); } catch {}
-                  logT('error', 'error.apply_answer', { msg: (e?.message || String(e)) });
-                  return true;
-                }
-              }
-              setTimeout(tryApply, 300);
-              return false;
-            };
-            await tryApply();
+          // Normalize incoming payload: support {type:'answer', sdp} or legacy {payload|answer}
+          const sdp =
+            (msg && (msg.sdp ||
+                     (msg.payload && msg.payload.sdp) ||
+                     (msg.answer && msg.answer.sdp))) || '';
+          if (!sdp) { console.warn('[SIGNAL] answer without sdp'); break; }
+          if (role !== 'caller') { break; } // callee never applies answer
+          try {
+            let pc = (window.getPC && window.getPC()) || (window.__WEBRTC__ && window.__WEBRTC__.getPC && window.__WEBRTC__.getPC());
+            if (!pc && typeof createPC === 'function') {
+              await createPC(() => {});
+              pc = (window.getPC && window.getPC());
+            }
+            if (!pc) { console.warn('[SIGNAL] no PC to apply answer'); break; }
+            const st = pc.signalingState;
+            if (!(st === 'have-local-offer' || st === 'stable')) {
+              console.warn('[SIGNAL] answer ignored: signalingState=', st);
+              break;
+            }
+            await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp }));
+            try { console.log('[SIGNAL] setRemoteDescription(answer) ok; signalingState=', pc.signalingState); } catch {}
+          } catch (e) {
+            console.error('[SIGNAL] apply answer failed', e && (e.message || String(e)));
           }
           break;
         }
