@@ -828,16 +828,42 @@ let offerAttempted = false;
 
   // --- BUTTON EVENT HANDLERS ---
   // Handler for "Call" button: create a room, connect, and prepare sharing.
-  if (btnAnswer) btnAnswer.onclick = async () => {
-    const rid = parseRoom();
-    if (!rid) {
-      alert(i18next.t('room.open_invite_with_param'));
-      logT('warn', 'warn.ws_already_connected_callee');
-      return;
+  // === CALLER: создать комнату и стартовать звонок ===
+  if (btnCall) btnCall.onclick = async () => {
+    try {
+      role = 'caller'; window.role = 'caller';
+      setStatusKey('status.preparing', 'warn');
+      btnCall.disabled = true;
+
+      // 1) создать комнату
+      const { roomId } = await apiCreateRoom();
+      if (!roomId) throw new Error('room create failed');
+      // показать ссылку
+      shareRoomLink(roomId);
+
+      // 2) подключить WS
+      await connectWS('caller', roomId, onSignal);
+
+      // 3) подготовить медиа и PC
+      await (window.__TURN_PROMISE__ || Promise.resolve()).catch(()=>{});
+      await waitTurnReady();
+      await getMic();
+      await createPC(async (s) => {
+        if (audioEl) { audioEl.muted = false; audioEl.srcObject = s; try { await audioEl.play(); } catch {} }
+        bindRemoteStream(s);
+        try { await startAudioViz(s); } catch {}
+        logT('webrtc', 'webrtc.remote_track');
+      });
+
+      // 4) отправить оффер
+      await sendOfferIfPossible();
+      if (btnHang) btnHang.disabled = false;
+      setStatusKey('room.ready_share_link', 'ok');
+    } catch (e) {
+      console.warn('[CALLER] start failed:', e && (e.message || String(e)));
+      setStatusKey(i18next.t('error.room_create_failed'), 'err');
+      btnCall.disabled = false;
     }
-    role = 'callee'; window.role = 'callee'; roomId = rid;
-    if (!isWSOpen()) await connectWS('callee', roomId, onSignal);
-    await autoAnswerIfReady();
   };
 
   // Handler for "Hang Up" button: clean up the call.
