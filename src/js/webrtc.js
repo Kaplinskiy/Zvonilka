@@ -206,7 +206,14 @@
         if (!NON_TRICKLE && typeof window.wsSend === 'function') window.wsSend('ice', null);
       }
     };
-    pc.onicegatheringstatechange = () => { log.ui('gathering=' + pc.iceGatheringState); if (pc.iceGatheringState === 'complete') log.ui('ICE gathering complete'); logSelectedPair('gathering:'+pc.iceGatheringState); };
+    pc.onicegatheringstatechange = async () => {
+      log.ui('gathering=' + pc.iceGatheringState);
+      if (pc.iceGatheringState === 'complete') {
+        log.ui('ICE gathering complete');
+        try { await pc.addIceCandidate(null); } catch (_) {}
+      }
+      logSelectedPair('gathering:' + pc.iceGatheringState);
+    };
     pc.oniceconnectionstatechange = () => { const st = pc.get ? pc.iceConnectionState : pc.iceConnectionState; dumpRtp('oniceconnectionstatechange:'+st); logSelectedPair('onice:'+st); log.ui('ice=' + st); if (st === 'failed') { try { pc.restartIce(); log.ui('restartIce (failed)'); } catch (_) {} } };
     pc.onconnectionstatechange = () => { log.d('connection=' + pc.connectionState); };
     pc.ontrack = (e) => { console.log('[TRACK]', { kind: e.track && e.track.kind, ready: e.track && e.track.readyState, streams: (e.streams||[]).length }); dumpRtp('ontrack'); const s = (e.streams && e.streams[0]) || (e.track ? new MediaStream([e.track]) : null); if (onTrackCb && s) onTrackCb(s); const a = ensureRemoteAudioElement(); a.srcObject = s; a.muted = false; a.play && a.play().catch(()=>{}); log.ui('webrtc.remote_track'); };
@@ -298,6 +305,8 @@
       if (NON_TRICKLE) await waitIceComplete(pc, 2500);
       await logSelectedPair('after-gather-offer');
       await dumpRtp('after-gather-offer');
+      // Explicitly signal end-of-candidates as a safety net
+      try { await pc.addIceCandidate(null); } catch(_) {}
       // Log how many candidates we packed into SDP
       try {
         const candLines = (offer.sdp || '').split('\r\n').filter(l => l.startsWith('a=candidate'));
@@ -357,6 +366,8 @@
       if (NON_TRICKLE) await waitIceComplete(pc, 2500);
       await logSelectedPair('after-gather-answer');
       await dumpRtp('after-gather-answer');
+      // Explicitly signal end-of-candidates as a safety net
+      try { await pc.addIceCandidate(null); } catch(_) {}
       // Log how many candidates we packed into SDP
       try {
         const candLines = (answer.sdp || '').split('\r\n').filter(l => l.startsWith('a=candidate'));

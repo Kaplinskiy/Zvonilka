@@ -138,6 +138,43 @@ function renderLangSwitch(active) {
     if (__videoMode && remoteVideo) remoteVideo.srcObject = s;
   }
 
+  async function autoAnswerIfReady() {
+    try {
+      if (role !== 'callee') return;
+      if (answerInProgress) return;
+      const offer = pendingOffer || window.__PENDING_OFFER || window.__LAST_OFFER || null;
+      if (!offer) return;
+      if (!(window.ws && window.ws.readyState === 1)) return; // ждём OPEN
+
+      // ensure TURN + mic + PC
+      try { await (window.__TURN_PROMISE__ || Promise.resolve()); } catch {}
+      await waitTurnReady();
+      await getMic();
+      if (!window.getPC || !window.getPC()) {
+        await createPC(async (s) => {
+          if (audioEl) { audioEl.muted = false; audioEl.srcObject = s; try { await audioEl.play(); } catch {} }
+          bindRemoteStream(s);
+          try { await startAudioViz(s); } catch {}
+          logT('webrtc', 'webrtc.remote_track');
+        });
+      }
+
+      answerInProgress = true;
+      await acceptIncoming(offer, async (s) => {
+        if (audioEl) { audioEl.muted = false; audioEl.srcObject = s; try { await audioEl.play(); } catch {} }
+        bindRemoteStream(s);
+        try { await startAudioViz(s); } catch {}
+        logT('webrtc', 'webrtc.remote_track');
+      });
+      pendingOffer = null; window.__PENDING_OFFER = null;
+      if (btnHang) btnHang.disabled = false;
+    } catch (e) {
+      try { console.warn('[AUTO-ANSWER] failed', e && (e.message || String(e))); } catch {}
+    } finally {
+      answerInProgress = false;
+    }
+  }
+
   function setVideoMode(on){
     __videoMode = !!on;
     if (videoWrap) videoWrap.style.display = on ? 'block' : 'none';
@@ -328,6 +365,7 @@ function renderLangSwitch(active) {
   // expose role to webrtc (it reads window.role)
   window.role = null;
 let pendingOffer = null;
+let answerInProgress = false;
 let offerAttempted = false;
 
   // Direct one-shot initial offer sender (avoids timeouts in trigger)
@@ -513,6 +551,9 @@ let offerAttempted = false;
           pendingOffer = _sdp ? { type: 'offer', sdp: _sdp } : (msg.payload || msg.offer || null);
           window.__PENDING_OFFER = pendingOffer;
           window.__LAST_OFFER = pendingOffer; // debug: allow manual accept from console
+
+          await autoAnswerIfReady();
+
           // Always show the Answer button; do NOT auto-accept to avoid races
           if (btnAnswer) btnAnswer.classList.remove('hidden');
           if (pendingOffer) {
@@ -787,33 +828,6 @@ let offerAttempted = false;
 
   // --- BUTTON EVENT HANDLERS ---
   // Handler for "Call" button: create a room, connect, and prepare sharing.
-  if (btnCall) btnCall.onclick = async () => {
-    try {
-      btnCall.disabled = true;
-      setStatusKey('status.preparing', 'warn');
-      const resp = await apiCreateRoom();
-      const rawId = (resp && (resp.roomId || resp.room || resp.id)) || null;
-      roomId = rawId ? String(rawId).replace(/[^A-Za-z0-9_-]/g, '') : null;
-      if (!roomId) {
-        setStatus(i18next.t('error.room_create_failed'), 'err');
-        btnCall.disabled = false;
-        return;
-      }
-    role = 'caller'; window.role = 'caller';
-    await connectWS('caller', roomId, onSignal);
-    shareRoomLink(roomId);
-    await startCaller();
-    setStatusKey('room.ready_share_link', 'ok');
-    if (btnHang) btnHang.disabled = false;
-    } catch (e) {
-      setStatus(i18next.t('error.room_create_failed'), 'err');
-      logT('error', 'error.room_create_failed');
-      if (noteEl) noteEl.textContent = e && e.message ? e.message : String(e);
-      btnCall.disabled = false;
-    }
-  };
-
-  // Handler for "Answer" button: connect as callee and accept incoming offer.
   if (btnAnswer) btnAnswer.onclick = async () => {
     const rid = parseRoom();
     if (!rid) {
@@ -822,40 +836,8 @@ let offerAttempted = false;
       return;
     }
     role = 'callee'; window.role = 'callee'; roomId = rid;
-    // Ensure TURN creds loaded before any PC creation
-    try { await (window.__TURN_PROMISE__ || Promise.resolve()); } catch {}
-
     if (!isWSOpen()) await connectWS('callee', roomId, onSignal);
-    else logT('warn', 'warn.ws_already_connected_callee');
-
-    let offerToUse = pendingOffer || window.__PENDING_OFFER || window.__LAST_OFFER || null;
-    if (!offerToUse) {
-      // Wait briefly for the caller to send the offer after member.joined
-      const t0 = Date.now();
-      while (!offerToUse && (Date.now() - t0) < 4000) {
-        await new Promise(r => setTimeout(r, 120));
-        offerToUse = pendingOffer || window.__PENDING_OFFER || window.__LAST_OFFER || null;
-      }
-    }
-    if (offerToUse) {
-      await waitTurnReady();
-      await getMic();
-      await acceptIncoming(offerToUse, async (s) => {
-        if (audioEl) {
-          audioEl.muted = false;
-          audioEl.srcObject = s;
-          try { await audioEl.play(); } catch {}
-        }
-        bindRemoteStream(s);
-        try { await startAudioViz(s); } catch {}
-        logT('webrtc', 'webrtc.remote_track');
-      });
-      pendingOffer = null;
-      if (btnHang) btnHang.disabled = false;
-    } else {
-      logT('warn', 'error.btnanswer_no_offer');
-      setStatusKey('signal.waiting_offer', 'warn');
-    }
+    await autoAnswerIfReady();
   };
 
   // Handler for "Hang Up" button: clean up the call.
