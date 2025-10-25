@@ -107,6 +107,25 @@
   }
   try { if (typeof window !== 'undefined') window.waitTurnReady = waitTurnReady; } catch (_) {}
 
+  // Always refetch TURN credentials before creating a PeerConnection
+  async function getFreshTurn() {
+    try {
+      const res = await fetch('/turn-credentials', { cache: 'no-store' });
+      const cfg = await res.json();
+      const now = Math.floor(Date.now() / 1000);
+      if (!cfg.expiresAt || (cfg.expiresAt - 60) < now) {
+        console.warn('[WEBRTC] TURN creds expired or near expiry, refetching...');
+        return await getFreshTurn();
+      }
+      console.log('[WEBRTC] fresh TURN creds loaded', cfg);
+      if (typeof window !== 'undefined') window.__TURN__ = cfg;
+      return cfg;
+    } catch (e) {
+      console.error('[WEBRTC] failed to fetch TURN creds', e);
+      throw e;
+    }
+  }
+
   async function getMic() {
     if (localStream) return localStream;
     try {
@@ -186,6 +205,7 @@
 
   async function createPC(onTrackCb) {
     // ensure TURN config is present before building PC so we don't fall back to STUN prematurely
+    try { await getFreshTurn(); } catch (_) { console.warn('[WEBRTC] getFreshTurn failed, continuing with existing config'); }
     try { await waitTurnReady(4000); } catch (_) {}
     const cfg = buildIceConfig();
     // prime ICE: small pool so local candidates appear quickly
@@ -223,21 +243,18 @@
       if (pc.iceGatheringState === 'complete') {
         log.ui('ICE gathering complete');
         try { await pc.addIceCandidate(null); } catch (_) {}
-        // If we are caller and offer was prepared, send it now only when allowed and candidates present
+        // Caller may resend offer as a safety if it wasn't sent earlier
         try {
           const r = getRole();
-          const allowed = (typeof window !== 'undefined' && ('__ALLOW_OFFER__' in window) && window.__ALLOW_OFFER__);
           const ld = pc && pc.localDescription;
           const hasCands = !!(ld && ld.sdp && /\ba=candidate:/m.test(ld.sdp));
-          if (r === 'caller' && wsReady() && allowed && offerPrepared && !offerSent && hasCands) {
-            console.log('[OFFER] send after gather complete, candidates present');
+          if (r === 'caller' && wsReady() && !offerSent && hasCands) {
+            console.log('[OFFER] send on gather-complete (safety, had candidates)');
             if (typeof window.wsSend === 'function') {
               window.wsSend('offer', { type: 'offer', sdp: ld.sdp });
               offerSent = true; offerPrepared = false; window.__SEND_OFFER_ONCE__ = true; log.ui('send offer');
               if (offerRetryTimer) { clearTimeout(offerRetryTimer); offerRetryTimer = null; }
             }
-          } else {
-            console.log('[OFFER] not sending yet (gate/ws/candidates)', { role: r, ws: wsReady(), allowed, offerPrepared, hasCands });
           }
         } catch (_) {}
       }
@@ -260,7 +277,6 @@
     pc.onnegotiationneeded = () => {
       const r = getRole();
       console.log('[NEGOTIATION] event role=', r, 'wsReady=', wsReady());
-      if (typeof window !== 'undefined' && ('__ALLOW_OFFER__' in window) && !window.__ALLOW_OFFER__) { console.log('[NEGOTIATION] blocked:not-allowed'); return; }
       if (r !== 'caller') {
         // Avoid spurious renegotiate on callee before remote offer is set
         if (r === 'callee' && pc && pc.remoteDescription) {
@@ -287,8 +303,6 @@
   }
 
   async function sendOfferIfPossible() {
-    // global gate: do not attempt an offer until main.js explicitly allows it (e.g., after 'ready')
-    if (typeof window !== 'undefined' && ('__ALLOW_OFFER__' in window) && !window.__ALLOW_OFFER__) { console.log('[OFFER-GUARD] block:not-allowed'); return; }
     if (offerRetryTimer) { console.log('[OFFER] retry already scheduled'); return; }
 
     // ensure we have a PeerConnection ready (await async createPC)
@@ -318,6 +332,11 @@
       try { await pc.getStats(); } catch (_) {}
       const offer = await pc.createOffer({ offerToReceiveAudio: 1 });
       await pc.setLocalDescription(offer); console.log('[OFFER] setLocal ok; gather=', pc.iceGatheringState);
+      // Send offer immediately over WS when ready
+      if (wsReady() && typeof window.wsSend === 'function' && !offerSent) {
+        window.wsSend('offer', pc.localDescription);
+        offerSent = true; offerPrepared = false; window.__SEND_OFFER_ONCE__ = true; log.ui('send offer');
+      }
       await logSelectedPair('after-setLocal-offer');
       // wait briefly for any local candidates to appear; if none, force a single ICE restart
       let localsSeen = 0;
@@ -339,7 +358,7 @@
       await dumpRtp('after-gather-offer');
       // mark offer prepared; actual wsSend will occur on ice-gathering complete when candidates exist and gate is open
       try { await pc.addIceCandidate(null); } catch(_) {}
-      offerPrepared = true;
+      offerPrepared = false; // offer already sent immediately; keep false
       try {
         const candLines = (offer.sdp || '').split('\r\n').filter(l => l.startsWith('a=candidate'));
         console.log('[OFFER] local candidates in SDP (prelim):', candLines.length, candLines.slice(0,5));

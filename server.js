@@ -93,6 +93,7 @@ function issueTurnCreds(req, res) {
     return res.json({
       iceServers: [{ urls, username, credential, credentialType: 'password' }],
       ttl: TURN_TTL,
+      expiresAt: expiry,
     });
   } catch (e) {
     console.error('[TURN] credentials failure', e && (e.message || e));
