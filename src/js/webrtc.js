@@ -13,8 +13,6 @@
   /** @type {MediaStream|null} */ let localStream = null;
   /** @type {boolean} */ let offerSent = false;
   /** @type {boolean} */ let offerInProgress = false;
-  /** @type {boolean} */ let negotiationScheduled = false;
-  /** @type {number|null} */ let offerRetryTimer = null;
   /** @type {boolean} */ let offerPrepared = false; // localDescription is set, wait to send after candidates
   /** @type {RTCIceCandidateInit[]} */ const remoteIceQueue = (Array.isArray(window.__REMOTE_ICE_Q) ? window.__REMOTE_ICE_Q : (window.__REMOTE_ICE_Q = []));
   /** @type {Set<string>} */ const sentLocalIce = new Set();
@@ -248,24 +246,10 @@
       if (pc.iceGatheringState === 'complete') {
         log.ui('ICE gathering complete');
         try { await pc.addIceCandidate(null); } catch (_) {}
-        // Caller may resend offer as a safety if it wasn't sent earlier
-        try {
-          const r = getRole();
-          const ld = pc && pc.localDescription;
-          const hasCands = !!(ld && ld.sdp && /\ba=candidate:/m.test(ld.sdp));
-          if (r === 'caller' && wsReady() && !offerSent && hasCands) {
-            console.log('[OFFER] send on gather-complete (safety, had candidates)');
-            if (typeof window.wsSend === 'function') {
-              window.wsSend('offer', { type: 'offer', sdp: ld.sdp });
-              offerSent = true; offerPrepared = false; window.__SEND_OFFER_ONCE__ = true; log.ui('send offer');
-              if (offerRetryTimer) { clearTimeout(offerRetryTimer); offerRetryTimer = null; }
-            }
-          }
-        } catch (_) {}
       }
       logSelectedPair('gathering:' + pc.iceGatheringState);
     };
-    pc.oniceconnectionstatechange = () => { const st = pc.get ? pc.iceConnectionState : pc.iceConnectionState; dumpRtp('oniceconnectionstatechange:'+st); logSelectedPair('onice:'+st); log.ui('ice=' + st); if (st === 'failed') { try { pc.restartIce(); log.ui('restartIce (failed)'); } catch (_) {} } };
+    pc.oniceconnectionstatechange = () => { const st = pc.iceConnectionState; dumpRtp('oniceconnectionstatechange:'+st); logSelectedPair('onice:'+st); log.ui('ice=' + st); };
     pc.onconnectionstatechange = () => { log.d('connection=' + pc.connectionState); };
     pc.ontrack = (e) => { console.log('[TRACK]', { kind: e.track && e.track.kind, ready: e.track && e.track.readyState, streams: (e.streams||[]).length }); dumpRtp('ontrack'); const s = (e.streams && e.streams[0]) || (e.track ? new MediaStream([e.track]) : null); if (onTrackCb && s) onTrackCb(s); const a = ensureRemoteAudioElement(); a.srcObject = s; a.muted = false; a.play && a.play().catch(()=>{}); log.ui('webrtc.remote_track'); };
 
@@ -282,20 +266,10 @@
     pc.onnegotiationneeded = () => {
       const r = getRole();
       console.log('[NEGOTIATION] event role=', r, 'wsReady=', wsReady());
-      if (r !== 'caller') {
-        // Avoid spurious renegotiate on callee before remote offer is set
-        if (r === 'callee' && pc && pc.remoteDescription) {
-          if (typeof window.wsSend === 'function') {
-            try { window.wsSend('renegotiate', { reason: 'onnegotiationneeded' }); log.ui('renegotiate request'); } catch (_) {}
-          }
-          logTransceivers('callee-onnegotiationneeded');
-        }
-        return;
-      }
-      if (!wsReady()) { console.log('[NEGOTIATION] ws not ready'); return; }
-      if (offerInProgress || offerSent || negotiationScheduled) { console.log('[NEGOTIATION] skip, busy'); return; }
-      negotiationScheduled = true;
-      setTimeout(() => { sendOfferIfPossible().finally(() => { negotiationScheduled = false; }); }, 200);
+      if (r !== 'caller') return;
+      if (!wsReady()) { console.log('[NEGOTIATION] ws not ready (no retry)'); return; }
+      if (offerInProgress || offerSent) { console.log('[NEGOTIATION] skip, already handled'); return; }
+      sendOfferIfPossible();
     };
 
     // Attach any pre-existing local tracks
@@ -308,67 +282,41 @@
   }
 
   async function sendOfferIfPossible() {
-    if (offerRetryTimer) { console.log('[OFFER] retry already scheduled'); return; }
-
-    // ensure we have a PeerConnection ready (await async createPC)
+    // Single attempt only
     if (!pc) {
       console.log('[OFFER] no pc yet, creating');
       try { if (typeof createPC === 'function') await createPC(); } catch (_) {}
     }
-    const st0 = pc && pc.signalingState;
-    console.log('[OFFER] enter (post-PC)', 'wsReady=', wsReady(), 'role=', getRole(), 'pc?', !!pc, 'state=', st0);
-
-    const ok = await waitWsOpen(4000);
-    if (!ok) {
-      console.warn('[OFFER] ws not ready; schedule single retry in 250ms');
-      if (!offerRetryTimer) offerRetryTimer = setTimeout(() => { offerRetryTimer = null; try { sendOfferIfPossible(); } catch (_) {} }, 250);
-      return;
-    }
     const r = getRole();
-    if (r !== 'caller') { console.log('[OFFER] not caller (', r, ')'); return; }
+    console.log('[OFFER] enter (post-PC)', 'wsReady=', wsReady(), 'role=', r, 'pc?', !!pc, 'state=', pc && pc.signalingState);
+    if (r !== 'caller') { console.log('[OFFER] not caller'); return; }
     if (!pc) { console.warn('[OFFER] no pc'); return; }
+    if (!wsReady()) { console.warn('[OFFER] ws not ready (no retry)'); return; }
     if (!(pc.signalingState === 'stable' || pc.signalingState === 'have-local-offer')) { console.log('[OFFER] not stable:', pc.signalingState); return; }
 
     offerInProgress = true;
     try {
       await getMic();
       await ensureAudioSender();
-      // Prime stats loop to kick ICE stack in some browsers
       try { await pc.getStats(); } catch (_) {}
       const offer = await pc.createOffer({ offerToReceiveAudio: 1 });
-      await pc.setLocalDescription(offer); console.log('[OFFER] setLocal ok; gather=', pc.iceGatheringState);
-      // Send offer immediately over WS when ready
+      await pc.setLocalDescription(offer);
+      console.log('[OFFER] setLocal ok; gather=', pc.iceGatheringState);
+
+      // Send offer immediately once
       if (wsReady() && typeof window.wsSend === 'function' && !offerSent) {
         window.wsSend('offer', pc.localDescription);
         offerSent = true; offerPrepared = false; window.__SEND_OFFER_ONCE__ = true; log.ui('send offer');
       }
+
       await logSelectedPair('after-setLocal-offer');
-      // wait briefly for any local candidates to appear; if none, force a single ICE restart
-      let localsSeen = 0;
-      try {
-        const t0 = Date.now();
-        while (Date.now() - t0 < 1800) {
-          const s = await pc.getStats();
-          s.forEach(r => { if (r.type === 'local-candidate') localsSeen++; });
-          if (localsSeen > 0) break;
-          await delay(120);
-        }
-        if (localsSeen === 0) {
-          console.warn('[OFFER] no local candidates observed; restarting ICE');
-          try { pc.restartIce(); } catch(_) {}
-        }
-      } catch(_) {}
-      if (NON_TRICKLE) await waitIceComplete(pc, 2500);
-      await logSelectedPair('after-gather-offer');
-      await dumpRtp('after-gather-offer');
-      // mark offer prepared; actual wsSend will occur on ice-gathering complete when candidates exist and gate is open
       try { await pc.addIceCandidate(null); } catch(_) {}
-      offerPrepared = false; // offer already sent immediately; keep false
+
+      // Log SDP candidates count for visibility only
       try {
         const candLines = (offer.sdp || '').split('\r\n').filter(l => l.startsWith('a=candidate'));
-        console.log('[OFFER] local candidates in SDP (prelim):', candLines.length, candLines.slice(0,5));
+        console.log('[OFFER] local candidates in SDP:', candLines.length);
       } catch(_) {}
-      console.log('[OFFER] prepared; will send after gather-complete when allowed');
     } catch (e) {
       offerSent = false; console.error('[OFFER] error', e);
     } finally {
@@ -397,20 +345,7 @@
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       await logSelectedPair('after-setLocal-answer');
-      // wait briefly for any local candidates to appear on callee; if none, restart ICE once
-      try {
-        let localsSeen = 0; const t0 = Date.now();
-        while (Date.now() - t0 < 1800) {
-          const s = await pc.getStats();
-          s.forEach(r => { if (r.type === 'local-candidate') localsSeen++; });
-          if (localsSeen > 0) break;
-          await delay(120);
-        }
-        if (localsSeen === 0) {
-          console.warn('[ANSWER] no local candidates observed; restarting ICE');
-          try { pc.restartIce(); } catch(_) {}
-        }
-      } catch(_) {}
+      // (local candidates wait and ICE restart removed)
       if (NON_TRICKLE) await waitIceComplete(pc, 2500);
       await logSelectedPair('after-gather-answer');
       await dumpRtp('after-gather-answer');
@@ -458,7 +393,7 @@
       localStream = null;
       sentLocalIce.clear();
       endOfCandidatesSent = false;
-      offerSent = false; offerInProgress = false; negotiationScheduled = false; remoteIceQueue.length = 0;
+      offerSent = false; offerInProgress = false; remoteIceQueue.length = 0;
       window.addLog && window.addLog('info', 'cleanup ' + (reason || ''));
     } catch (_) {}
   }
