@@ -388,7 +388,7 @@
       window.addLog && window.addLog('info', 'cleanup ' + (reason || ''));
     } catch (_) {}
   }
-
+  window.addRemoteIce = addRemoteIce;
   // Public API
   window.__WEBRTC__ = { getPC, createPC, getMic, sendOfferIfPossible, acceptIncoming, addRemoteIce, cleanup };
   window.getPC = window.getPC || getPC;
