@@ -911,12 +911,16 @@ let hangInProgress = false;
     if (reason !== 'peer-bye') { try { wsSend('bye', { reason }); } catch {} }
     try { wsClose(); } catch {}
     try { cleanupRTC(reason); } catch {}
+    // Extra guard: stop local mic sender track at app layer
+    try { const s = (typeof getLocalAudioSender === 'function') && getLocalAudioSender(); if (s && s.track && s.track.stop) s.track.stop(); } catch {}
     clearInterval(pingTimer);
     stopAudioViz();
     try { setLocalMicMuted(false); } catch {}
     if (btnMicToggle) btnMicToggle.disabled = true;
     setVideoMode(false);
     __remoteStream = null;
+    // Hard stop remote audio element
+    try { if (audioEl) { audioEl.pause(); audioEl.srcObject = null; } } catch {}
     // stop PC watchdog to avoid late UI flips after hangup
     try { if (window.__PC_WATCHDOG__) { clearInterval(window.__PC_WATCHDOG__); delete window.__PC_WATCHDOG__; } } catch {}
     if (remoteVideo) remoteVideo.srcObject = null;
