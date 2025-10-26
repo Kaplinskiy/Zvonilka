@@ -382,9 +382,12 @@
     if (!pc) { remoteIceQueue.push(candidate); return; }
     if (!pc.remoteDescription) { remoteIceQueue.push(candidate); return; }
     if (candidate == null) { try { await pc.addIceCandidate(null); } catch (_) {} return; }
-    const init = typeof candidate === 'string' ? { candidate: candidate } : candidate;
+    const init = (typeof candidate === 'string') ? { candidate } : Object.assign({}, candidate);
+    if (!('sdpMid' in init) && !('sdpMLineIndex' in init)) { init.sdpMid = '0'; init.sdpMLineIndex = 0; }
     try { await pc.addIceCandidate(init); console.log('[ICE<-REMOTE] added'); logSelectedPair('addRemoteIce'); }
-    catch (e) { console.error('[ICE<-REMOTE] add failed', e); }
+    catch (e) {
+      try { console.error('[ICE<-REMOTE] add failed', { err: e && (e.message || String(e)), cand: init && init.candidate }); } catch(_) {}
+    }
   }
 
   function cleanup(reason = '') {

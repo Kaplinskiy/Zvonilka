@@ -174,6 +174,28 @@ function connectWS(role, roomId, onMessage) {
             }
           }
         } catch {}
+
+        // Ensure ICE candidate has m-line hints for browsers that require them
+        try {
+          if (msg && msg.type === 'ice') {
+            if (msg.candidate === null) {
+              // end-of-candidates marker
+            } else if (typeof msg.candidate === 'string') {
+              msg.candidate = { candidate: msg.candidate, sdpMid: '0', sdpMLineIndex: 0 };
+            } else if (msg.candidate && typeof msg.candidate === 'object') {
+              if (!('candidate' in msg.candidate) && typeof msg.candidate.candidate !== 'string') {
+                // some backends may wrap in payload field
+                const raw = msg.candidate.payload || msg.candidate.data || null;
+                if (typeof raw === 'string') msg.candidate = { candidate: raw };
+              }
+              if (!('sdpMid' in msg.candidate) && !('sdpMLineIndex' in msg.candidate)) {
+                msg.candidate.sdpMid = '0';
+                msg.candidate.sdpMLineIndex = 0;
+              }
+            }
+          }
+        } catch {}
+
         try { window.__SIG_HOOK && window.__SIG_HOOK(msg); } catch {}
 
         // Drop messages for other clients or from stale sockets
@@ -281,10 +303,31 @@ function connectWS(role, roomId, onMessage) {
       let out;
       if (type === 'ice') {
         // Canonical ICE: {type:'ice', candidate:<RTCIceCandidateInit|null>}
-        const cand = (payload && typeof payload === 'object' && 'candidate' in payload)
-          ? payload.candidate
-          : (payload ?? null);
-        out = { type: 'ice', candidate: cand };
+        // Always include sdpMid/sdpMLineIndex for single m=0 audio
+        let candInit = null;
+        if (payload && typeof payload === 'object' && 'candidate' in payload) {
+          candInit = payload.candidate;
+        } else {
+          candInit = payload ?? null;
+        }
+        if (candInit === null) {
+          out = { type: 'ice', candidate: null };
+        } else if (typeof candInit === 'string') {
+          out = { type: 'ice', candidate: { candidate: candInit, sdpMid: '0', sdpMLineIndex: 0 } };
+        } else if (candInit && typeof candInit === 'object') {
+          // clone and ensure hints
+          const cc = Object.assign({}, candInit);
+          if (!('sdpMid' in cc) && !('sdpMLineIndex' in cc)) {
+            cc.sdpMid = '0';
+            cc.sdpMLineIndex = 0;
+          }
+          if (!('candidate' in cc) && typeof cc.candidate !== 'string' && typeof payload === 'string') {
+            cc.candidate = String(payload);
+          }
+          out = { type: 'ice', candidate: cc };
+        } else {
+          out = { type: 'ice', candidate: null };
+        }
       } else if (type === 'offer') {
         // Canonical offer: {type:'offer', sdp:<string>}
         const sdp = (payload && (payload.sdp || payload?.payload?.sdp)) || payload;
