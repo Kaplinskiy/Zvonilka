@@ -245,7 +245,6 @@
       log.ui('gathering=' + pc.iceGatheringState);
       if (pc.iceGatheringState === 'complete') {
         log.ui('ICE gathering complete');
-        try { await pc.addIceCandidate(null); } catch (_) {}
       }
       logSelectedPair('gathering:' + pc.iceGatheringState);
     };
@@ -310,7 +309,6 @@
       }
 
       await logSelectedPair('after-setLocal-offer');
-      try { await pc.addIceCandidate(null); } catch(_) {}
 
       // Log SDP candidates count for visibility only
       try {
@@ -349,8 +347,6 @@
       if (NON_TRICKLE) await waitIceComplete(pc, 2500);
       await logSelectedPair('after-gather-answer');
       await dumpRtp('after-gather-answer');
-      // Explicitly signal end-of-candidates as a safety net
-      try { await pc.addIceCandidate(null); } catch(_) {}
       // Log how many candidates we packed into SDP
       try {
         const candLines = (answer.sdp || '').split('\r\n').filter(l => l.startsWith('a=candidate'));
@@ -358,8 +354,6 @@
       } catch(_) {}
       const final = pc.localDescription || answer;
       if (typeof window.wsSend === 'function') { window.wsSend('answer', final); log.ui('send answer'); }
-      // Explicitly signal end-of-candidates in non-trickle mode (harmless if already present)
-      try { if (NON_TRICKLE) await pc.addIceCandidate(null); } catch(_){ }
       // Also log counts of candidates we see locally
       try {
         const s = await pc.getStats();

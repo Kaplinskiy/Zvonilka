@@ -581,6 +581,17 @@ let calleeArmed = false;
                   try { await addRemoteIce(c); } catch {}
                 }
               } catch {}
+              // Apply buffered end-of-candidates marker once (callee)
+              try {
+                if (Array.isArray(window.__REMOTE_ICE_Q)) {
+                  const hadEoc = window.__REMOTE_ICE_Q.includes(null);
+                  window.__REMOTE_ICE_Q = window.__REMOTE_ICE_Q.filter(x => x !== null);
+                  if (hadEoc) {
+                    const pc2 = (window.getPC && window.getPC());
+                    if (pc2 && pc2.addIceCandidate) await pc2.addIceCandidate(null);
+                  }
+                }
+              } catch {}
               pendingOffer = null;
               if (btnHang) btnHang.disabled = false;
               setStatusKey('common.ready', 'ok');
@@ -620,6 +631,18 @@ let calleeArmed = false;
               const buf = Array.isArray(window.__REMOTE_ICE_Q) ? window.__REMOTE_ICE_Q.splice(0) : [];
               for (const c of buf) {
                 try { await addRemoteIce(c); } catch {}
+              }
+            } catch {}
+            // Apply buffered end-of-candidates marker once
+            try {
+              if (Array.isArray(window.__REMOTE_ICE_Q)) {
+                const hadEoc = window.__REMOTE_ICE_Q.includes(null);
+                // clear all occurrences
+                window.__REMOTE_ICE_Q = window.__REMOTE_ICE_Q.filter(x => x !== null);
+                if (hadEoc) {
+                  const pc2 = (window.getPC && window.getPC());
+                  if (pc2 && pc2.addIceCandidate) await pc2.addIceCandidate(null);
+                }
               }
             } catch {}
             try { console.log('[SIGNAL] setRemoteDescription(answer) ok; signalingState=', pc.signalingState); } catch {}
@@ -680,12 +703,10 @@ let calleeArmed = false;
             );
           }
 
-          // End-of-candidates marker
+          // End-of-candidates marker: buffer EOC; apply after remoteDescription + real ICE flushed
           if (cand === null || cand === false) {
-            try {
-              const pc = (window.getPC && window.getPC()) || (window.__WEBRTC__ && window.__WEBRTC__.getPC && window.__WEBRTC__.getPC());
-              if (pc && pc.addIceCandidate) await pc.addIceCandidate(null);
-            } catch {}
+            window.__REMOTE_ICE_Q = Array.isArray(window.__REMOTE_ICE_Q) ? window.__REMOTE_ICE_Q : [];
+            window.__REMOTE_ICE_Q.push(null);
             break;
           }
 
