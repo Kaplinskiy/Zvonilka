@@ -185,6 +185,10 @@
     }
   }
 
+  function getLocalStream() {
+    return localStream || null;
+  }
+
   async function ensureAudioSender() {
     if (!pc || !localStream) return;
     const track = (localStream.getAudioTracks && localStream.getAudioTracks()[0]) || null;
@@ -437,7 +441,7 @@
   }
   window.addRemoteIce = addRemoteIce;
   // Public API
-  window.__WEBRTC__ = { getPC, createPC, getMic, getCam, ensureVideoSender, sendOfferIfPossible, acceptIncoming, addRemoteIce, cleanup };
+  window.__WEBRTC__ = { getPC, createPC, getMic, getCam, ensureVideoSender, getLocalStream, sendOfferIfPossible, acceptIncoming, addRemoteIce, cleanup };
   window.getPC = window.getPC || getPC;
   window.sendOfferIfPossible = window.sendOfferIfPossible || sendOfferIfPossible;
   window.acceptIncoming = window.acceptIncoming || acceptIncoming;

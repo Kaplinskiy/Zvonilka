@@ -180,6 +180,39 @@ function renderLangSwitch(active) {
     if (videoWrap) videoWrap.style.display = on ? 'block' : 'none';
     if (videoDock) videoDock.style.display = on ? 'flex' : 'none';
     if (on && remoteVideo && __remoteStream) remoteVideo.srcObject = __remoteStream;
+    // also toggle local preview element if present
+    const lp = document.getElementById('localPreview');
+    if (lp) lp.style.display = on ? 'block' : 'none';
+  }
+
+  function ensureLocalPreviewElement(){
+    let el = document.getElementById('localPreview');
+    if (!el) {
+      el = document.createElement('video');
+      el.id = 'localPreview';
+      el.muted = true; el.autoplay = true; el.playsInline = true;
+      el.setAttribute('playsinline','');
+      el.style.width = '160px';
+      el.style.height = '120px';
+      el.style.objectFit = 'cover';
+      el.style.borderRadius = '8px';
+      el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.25)';
+      el.style.background = '#000';
+      const host = videoDock || videoWrap || document.body;
+      host.appendChild(el);
+    }
+    return el;
+  }
+
+  async function bindLocalPreview(){
+    try {
+      const s = (window.__WEBRTC__ && typeof window.__WEBRTC__.getLocalStream === 'function')
+        ? window.__WEBRTC__.getLocalStream() : null;
+      if (!s) return;
+      const el = ensureLocalPreviewElement();
+      if (el.srcObject !== s) el.srcObject = s;
+      el.style.display = __videoMode ? 'block' : 'none';
+    } catch {}
   }
 
   // --- LOCAL MIC CONTROL (toggle sender.track.enabled) ---
@@ -1110,6 +1143,7 @@ let hangInProgress = false;
           try { await window.sendOfferIfPossible(); } catch {}
         }
         setVideoMode(true);
+        await bindLocalPreview();
         try { btnVideoToggle.setAttribute('aria-pressed', 'true'); } catch {}
         return;
       }
@@ -1118,6 +1152,7 @@ let hangInProgress = false;
       const next = !vs.track.enabled;
       try { vs.track.enabled = next; } catch {}
       setVideoMode(next);
+      await bindLocalPreview();
       try { btnVideoToggle.setAttribute('aria-pressed', next ? 'true' : 'false'); } catch {}
       if (!next) {
         if (noteEl) noteEl.textContent = i18next.t('video.off');
