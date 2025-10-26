@@ -346,6 +346,7 @@ function renderLangSwitch(active) {
           flipInCallUI();
         } else if (st === 'disconnected' || st === 'failed') {
           setStatusKey('call.ended', 'warn-txt');
+          try { doCleanup('peer-bye'); } catch {}
         }
       };
 
@@ -669,6 +670,9 @@ let hangInProgress = false;
                 logT('webrtc','webrtc.remote_track');
               });
               setHangBig(true);
+              // Force in-call UI and hide Answer button
+              try { flipInCallUI(); } catch {}
+              if (btnAnswer) btnAnswer.classList.add('hidden');
               // Flush any ICE buffered before remoteDescription was applied (callee)
               try {
                 const buf = Array.isArray(window.__REMOTE_ICE_Q) ? window.__REMOTE_ICE_Q.splice(0) : [];
@@ -1023,6 +1027,7 @@ let hangInProgress = false;
     if (hangInProgress) return;
     hangInProgress = true;
     try { btnHang.disabled = true; } catch {}
+    try { setLocalMicMuted(true); } catch {}
     doCleanup('user-hangup');
     // allow subsequent calls after UI resets
     setTimeout(() => { hangInProgress = false; }, 1200);
