@@ -48,7 +48,7 @@ async function loadTurnConfig(force = false) {
         const str = String(u).trim();
         if (/^turns?:/i.test(str)) return str;
         const host = str.replace(/^https?:\/\//i,'').split(/[/?#:]/)[0];
-        return `turns:${host || 'turn.zababba.com'}:5349?transport=tcp`;
+        return `turns:${host || 'turn.zababba.com'}:443?transport=tcp`;
       }),
       username: s.username,
       credential: s.credential,
@@ -69,7 +69,7 @@ async function loadTurnConfig(force = false) {
     // минимальный фоллбек, если нет вообще ничего
     window.__TURN__ = {
       iceServers: [
-        { urls: ['turns:turn.zababba.com:5349?transport=tcp', 'turn:turn.zababba.com:3478?transport=udp'] }
+        { urls: ['turns:turn.zababba.com:443?transport=tcp', 'turn:turn.zababba.com:443?transport=udp'] }
       ],
       forceRelay: true,
       issuedAt: Math.floor(Date.now()/1000),
