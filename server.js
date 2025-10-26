@@ -36,8 +36,8 @@ function buildTurnUrls(urls) {
     if (/^turns?:\/\//i.test(raw)) {
       let host = raw.replace(/^turns?:\/{0,2}/i, '').split(/[/?#:]/)[0].split(':')[0];
       if (!host || host.toLowerCase() === 'turns') host = 'turn.zababba.com';
-      out.add(`turns:${host}:5349?transport=tcp`);
-      out.add(`turn:${host}:3478?transport=udp`);
+      out.add(`turns:${host}:443?transport=tcp`);
+      out.add(`turn:${host}:443?transport=udp`);
       continue;
     }
     // Host-only token -> add both tcp/udp
@@ -49,8 +49,8 @@ function buildTurnUrls(urls) {
       .split(':')[0]
       .trim();
     if (!host || host.toLowerCase() === 'turns') host = 'turn.zababba.com';
-    out.add(`turns:${host}:5349?transport=tcp`);
-    out.add(`turn:${host}:3478?transport=udp`);
+    out.add(`turns:${host}:443?transport=tcp`);
+    out.add(`turn:${host}:443?transport=udp`);
   }
   return Array.from(out);
 }
