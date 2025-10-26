@@ -699,6 +699,8 @@ let calleeArmed = false;
                 }
               }
             } catch {}
+            // Ensure caller UI is flipped to in-call after SDP answer is applied
+            try { if (!window.__PC_UI_FLIPPED__) flipInCallUI(); } catch {}
             try { console.log('[SIGNAL] setRemoteDescription(answer) ok; signalingState=', pc.signalingState); } catch {}
           } catch (e) {
             console.error('[SIGNAL] apply answer failed', e && (e.message || String(e)));
