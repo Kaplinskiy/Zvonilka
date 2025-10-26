@@ -953,7 +953,7 @@ let hangInProgress = false;
    * Initialize the app based on the roomId in the URL, if present.
    * If no roomId, prepare the caller UI; otherwise, connect as callee.
    */
-  async function initByUrl() {
+  function initByUrl() {
     const rid = parseRoom();
     if (!rid) {
       logT('info', 'debug.no_room_param_caller');
@@ -969,16 +969,16 @@ let hangInProgress = false;
     if (btnCall)   btnCall.classList.add('hidden');
     setStatusKey('ws.waiting_offer', 'ok');
 
-    // Ensure WS is connected for callee and try immediate auto-answer if offer already arrived
-    try {
-      if (!isWSOpen()) await connectWS('callee', roomId, onSignal);
-      // If TURN loader exists, kick it so we don't create PC with empty ICE later
-      try { await (window.__TURN_PROMISE__ || Promise.resolve()); } catch {}
-      // ждать оффер от caller; ответ пойдёт после нажатия кнопки или сигнала 'ready'
-      setStatusKey('signal.waiting_offer', 'warn');
-    } catch (e) {
-      try { console.warn('[INIT callee] failed to connect/auto-answer:', e && (e.message || String(e))); } catch {}
-    }
+    // // Ensure WS is connected for callee and try immediate auto-answer if offer already arrived
+    // try {
+    //   if (!isWSOpen()) await connectWS('callee', roomId, onSignal);
+    //   // If TURN loader exists, kick it so we don't create PC with empty ICE later
+    //   try { await (window.__TURN_PROMISE__ || Promise.resolve()); } catch {}
+    //   // ждать оффер от caller; ответ пойдёт после нажатия кнопки или сигнала 'ready'
+    //   setStatusKey('signal.waiting_offer', 'warn');
+    // } catch (e) {
+    //   try { console.warn('[INIT callee] failed to connect/auto-answer:', e && (e.message || String(e))); } catch {}
+    // }
   }
 
   // --- BUTTON EVENT HANDLERS ---
@@ -1059,21 +1059,21 @@ let hangInProgress = false;
   };
 
   // Handler for "Copy Diagnostics" button: copy diagnostic info to the clipboard.
-  if (btnCopyDiag) btnCopyDiag.onclick = async () => {
-    const report = [
-      '=== DIAG REPORT ===',
-      'url: ' + location.href,
-      'secure: ' + window.isSecureContext,
-      'protocol: ' + location.protocol,
-      'ua: ' + navigator.userAgent,
-      'getUserMedia: ' + !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
-      'RTCPeerConnection: ' + (typeof RTCPeerConnection),
-      'server: ' + SERVER_URL,
-      'ws: ' + WS_URL,
-      'room: ' + (roomId || parseRoom() || '-')
-    ].join('\n');
-    try { await navigator.clipboard.writeText(report); } catch { alert(report); }
-  };
+  // if (btnCopyDiag) btnCopyDiag.onclick = async () => {
+  //   const report = [
+  //     '=== DIAG REPORT ===',
+  //     'url: ' + location.href,
+  //     'secure: ' + window.isSecureContext,
+  //     'protocol: ' + location.protocol,
+  //     'ua: ' + navigator.userAgent,
+  //     'getUserMedia: ' + !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
+  //     'RTCPeerConnection: ' + (typeof RTCPeerConnection),
+  //     'server: ' + SERVER_URL,
+  //     'ws: ' + WS_URL,
+  //     'room: ' + (roomId || parseRoom() || '-')
+  //   ].join('\n');
+  //   try { await navigator.clipboard.writeText(report); } catch { alert(report); }
+  // };
 
   // --- APPLICATION BOOTSTRAP SEQUENCE ---
 
@@ -1100,7 +1100,7 @@ let hangInProgress = false;
   });
   setStatusKey('status.initializing');
   try { renderEnv(); } catch {}
-  logT('info', 'dev.client_loaded_vite');
+  //logT('info', 'dev.client_loaded_vite');
   initByUrl();
 
   // Set initial visibility of buttons on page load based on room presence.
