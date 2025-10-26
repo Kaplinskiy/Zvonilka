@@ -276,6 +276,21 @@ function renderLangSwitch(active) {
     stopCallTimer();
   }
 
+  // --- IN-CALL UI FLIP HELPER ---
+  function flipInCallUI() {
+    try {
+      setStatusKey('status.in_call', 'ok');
+      if (btnCall) btnCall.classList.add('hidden');
+      if (btnAnswer) btnAnswer.classList.add('hidden');
+      if (btnHang) btnHang.disabled = false;
+      if (shareWrap) shareWrap.classList.add('hidden');
+      const s = (audioEl && audioEl.srcObject) || (__remoteStream || null);
+      if (s) startAudioViz(s);
+      if (audioEl) { audioEl.muted = false; try { audioEl.play(); } catch {} }
+      window.__PC_UI_FLIPPED__ = true;
+    } catch {}
+  }
+
   // --- WATCH PEER CONNECTION STATE → DRIVE UI ---
   function installPcStateWatch() {
     try {
@@ -288,17 +303,7 @@ function renderLangSwitch(active) {
         const st = pc.iceConnectionState;
         try { addLog('webrtc', 'oniceconnectionstatechange:' + st); } catch {}
         if (st === 'connected') {
-          setStatusKey('status.in_call', 'ok');
-          if (btnCall) btnCall.classList.add('hidden');
-          if (btnAnswer) btnAnswer.classList.add('hidden');
-          if (btnHang) btnHang.disabled = false;
-          // Inserted: hide shareWrap and start audio viz
-          if (shareWrap) shareWrap.classList.add('hidden');
-          try {
-            const s = (audioEl && audioEl.srcObject) || (__remoteStream || null);
-            if (s) { startAudioViz(s); }
-          } catch {}
-          if (audioEl) { audioEl.muted = false; try { audioEl.play(); } catch {} }
+          flipInCallUI();
         } else if (st === 'disconnected' || st === 'failed') {
           setStatusKey('call.ended', 'warn-txt');
         }
@@ -308,12 +313,20 @@ function renderLangSwitch(active) {
         const cs = pc.connectionState;
         try { addLog('webrtc', 'connection=' + cs); } catch {}
         if (cs === 'connected') {
-          setStatusKey('status.in_call', 'ok');
-          if (btnHang) btnHang.disabled = false;
-          // Inserted: hide shareWrap
-          if (shareWrap) shareWrap.classList.add('hidden');
+          flipInCallUI();
         }
       };
+
+      // Immediate one-shot check in case PC is already connected when watcher attaches
+      try {
+        if ((pc.iceConnectionState === 'connected' || pc.connectionState === 'connected') && !window.__PC_UI_FLIPPED__) {
+          flipInCallUI();
+        }
+      } catch {}
+
+      // Watchdog: fallback polling for connection state
+      // (if you have a watchdog block, insert this check before it)
+      // If there is an existing watchdog block, patch it below.
     } catch {}
   }
 
