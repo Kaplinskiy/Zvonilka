@@ -276,6 +276,39 @@ function renderLangSwitch(active) {
     stopCallTimer();
   }
 
+  // --- WATCH PEER CONNECTION STATE → DRIVE UI ---
+  function installPcStateWatch() {
+    try {
+      if (window.__PC_WATCH_INSTALLED__) return;
+      const pc = (window.getPC && window.getPC());
+      if (!pc) return;
+      window.__PC_WATCH_INSTALLED__ = true;
+
+      pc.oniceconnectionstatechange = () => {
+        const st = pc.iceConnectionState;
+        try { addLog('webrtc', 'oniceconnectionstatechange:' + st); } catch {}
+        if (st === 'connected') {
+          setStatusKey('call.in_call', 'ok');
+          if (btnCall) btnCall.classList.add('hidden');
+          if (btnAnswer) btnAnswer.classList.add('hidden');
+          if (btnHang) btnHang.disabled = false;
+          if (audioEl) { audioEl.muted = false; try { audioEl.play(); } catch {} }
+        } else if (st === 'disconnected' || st === 'failed') {
+          setStatusKey('call.ended', 'warn-txt');
+        }
+      };
+
+      pc.onconnectionstatechange = () => {
+        const cs = pc.connectionState;
+        try { addLog('webrtc', 'connection=' + cs); } catch {}
+        if (cs === 'connected') {
+          setStatusKey('call.in_call', 'ok');
+          if (btnHang) btnHang.disabled = false;
+        }
+      };
+    } catch {}
+  }
+
   const btnCall = document.getElementById('btnCall');
   const btnAnswer = document.getElementById('btnAnswer');
   const btnHang = document.getElementById('btnHang');
@@ -533,6 +566,7 @@ let calleeArmed = false;
                 logT('webrtc','webrtc.remote_track');
               });
             }
+            installPcStateWatch();
             offerAttempted = false;
             await window.sendOfferIfPossible();
             logT('webrtc','webrtc.offer_sent_caller');
@@ -567,6 +601,7 @@ let calleeArmed = false;
                   try { await startAudioViz(s); } catch {}
                   logT('webrtc','webrtc.remote_track');
                 });
+                installPcStateWatch();
               }
               await acceptIncoming(pendingOffer, async (s) => {
                 if (audioEl) { audioEl.muted = false; audioEl.srcObject = s; try { await audioEl.play(); } catch {} }
@@ -773,6 +808,7 @@ let calleeArmed = false;
       try { await startAudioViz(s); } catch {}
       logT('webrtc', 'webrtc.remote_track');
     });
+    installPcStateWatch();
     setStatusKey('room.ready_share_link', 'ok');
     if (btnHang) btnHang.disabled = false;
   }
