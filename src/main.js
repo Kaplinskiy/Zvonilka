@@ -294,10 +294,11 @@ function renderLangSwitch(active) {
   // --- WATCH PEER CONNECTION STATE → DRIVE UI ---
   function installPcStateWatch() {
     try {
-      if (window.__PC_WATCH_INSTALLED__) return;
       const pc = (window.getPC && window.getPC());
       if (!pc) return;
-      window.__PC_WATCH_INSTALLED__ = true;
+      // Rebind handlers if PC changed
+      if (window.__PC_WATCH_PC__ === pc) return;
+      window.__PC_WATCH_PC__ = pc;
 
       pc.oniceconnectionstatechange = () => {
         const st = pc.iceConnectionState;
@@ -324,9 +325,6 @@ function renderLangSwitch(active) {
         }
       } catch {}
 
-      // Watchdog: fallback polling for connection state
-      // (if you have a watchdog block, insert this check before it)
-      // If there is an existing watchdog block, patch it below.
     } catch {}
   }
 
@@ -887,6 +885,9 @@ let calleeArmed = false;
     // Final guard: ensure Start is visible and enabled
     if (btnCall) { btnCall.classList.remove('hidden'); btnCall.disabled = false; }
     if (btnAnswer) btnAnswer.classList.add('hidden');
+    // allow re-binding state watchers for next call
+    try { delete window.__PC_WATCH_PC__; } catch {}
+    try { window.__PC_UI_FLIPPED__ = false; } catch {}
   }
 
   // --- INITIALIZATION BASED ON URL PARAMETERS ---
