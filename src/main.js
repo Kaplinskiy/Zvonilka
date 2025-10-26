@@ -288,7 +288,7 @@ function renderLangSwitch(active) {
         const st = pc.iceConnectionState;
         try { addLog('webrtc', 'oniceconnectionstatechange:' + st); } catch {}
         if (st === 'connected') {
-          setStatusKey('call.in_call', 'ok');
+          setStatusKey('status.in_call', 'ok');
           if (btnCall) btnCall.classList.add('hidden');
           if (btnAnswer) btnAnswer.classList.add('hidden');
           if (btnHang) btnHang.disabled = false;
@@ -302,7 +302,7 @@ function renderLangSwitch(active) {
         const cs = pc.connectionState;
         try { addLog('webrtc', 'connection=' + cs); } catch {}
         if (cs === 'connected') {
-          setStatusKey('call.in_call', 'ok');
+          setStatusKey('status.in_call', 'ok');
           if (btnHang) btnHang.disabled = false;
         }
       };
