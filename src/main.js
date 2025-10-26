@@ -182,6 +182,27 @@ function renderLangSwitch(active) {
     if (on && remoteVideo && __remoteStream) remoteVideo.srcObject = __remoteStream;
   }
 
+  // --- LOCAL MIC CONTROL (toggle sender.track.enabled) ---
+  function getLocalAudioSender() {
+    try {
+      const pc = (window.getPC && window.getPC());
+      if (!pc || !pc.getSenders) return null;
+      return pc.getSenders().find(s => s && s.track && s.track.kind === 'audio') || null;
+    } catch { return null; }
+  }
+  function setLocalMicMuted(muted) {
+    try {
+      const s = getLocalAudioSender();
+      if (s && s.track) s.track.enabled = !muted;
+      if (noteEl) noteEl.textContent = muted ? i18next.t('call.mic_muted') : i18next.t('common.ready');
+      if (btnMicToggle) btnMicToggle.setAttribute('aria-pressed', muted ? 'true' : 'false');
+    } catch {}
+  }
+  function getLocalMicMuted() {
+    const s = getLocalAudioSender();
+    return !s || !s.track ? false : (s.track.enabled === false);
+  }
+
   // Wait until TURN creds are loaded to avoid creating PC with empty ICE config
   async function waitTurnReady(timeoutMs = 6000) {
     const t0 = Date.now();
@@ -276,6 +297,22 @@ function renderLangSwitch(active) {
     stopCallTimer();
   }
 
+  // --- HANG BUTTON SIZING ---
+  function setHangBig(on = true) {
+    if (!btnHang) return;
+    try {
+      if (on) {
+        btnHang.style.width = '100%';
+        btnHang.style.height = '56px';
+        btnHang.style.fontSize = '18px';
+      } else {
+        btnHang.style.width = '';
+        btnHang.style.height = '';
+        btnHang.style.fontSize = '';
+      }
+    } catch {}
+  }
+
   // --- IN-CALL UI FLIP HELPER ---
   function flipInCallUI() {
     try {
@@ -283,6 +320,8 @@ function renderLangSwitch(active) {
       if (btnCall) btnCall.classList.add('hidden');
       if (btnAnswer) btnAnswer.classList.add('hidden');
       if (btnHang) btnHang.disabled = false;
+      if (btnMicToggle) btnMicToggle.disabled = false;
+      setHangBig(true);
       if (shareWrap) shareWrap.classList.add('hidden');
       const s = (audioEl && audioEl.srcObject) || (__remoteStream || null);
       if (s) startAudioViz(s);
@@ -422,6 +461,7 @@ let pendingOffer = null;
 let answerInProgress = false;
 let offerAttempted = false;
 let calleeArmed = false;
+let hangInProgress = false;
 
   // Direct one-shot initial offer sender (avoids timeouts in trigger)
   async function sendInitialOfferOnce(maxWaitMs = 3000) {
@@ -628,6 +668,7 @@ let calleeArmed = false;
                 try { await startAudioViz(s); } catch {}
                 logT('webrtc','webrtc.remote_track');
               });
+              setHangBig(true);
               // Flush any ICE buffered before remoteDescription was applied (callee)
               try {
                 const buf = Array.isArray(window.__REMOTE_ICE_Q) ? window.__REMOTE_ICE_Q.splice(0) : [];
@@ -832,6 +873,7 @@ let calleeArmed = false;
     installPcStateWatch();
     // Removed: setStatusKey('room.ready_share_link', 'ok');
     if (btnHang) btnHang.disabled = false;
+    if (btnMicToggle) btnMicToggle.disabled = false;
   }
 
   /**
@@ -867,8 +909,12 @@ let calleeArmed = false;
     try { cleanupRTC(reason); } catch {}
     clearInterval(pingTimer);
     stopAudioViz();
+    try { setLocalMicMuted(false); } catch {}
+    if (btnMicToggle) btnMicToggle.disabled = true;
     setVideoMode(false);
     __remoteStream = null;
+    // stop PC watchdog to avoid late UI flips after hangup
+    try { if (window.__PC_WATCHDOG__) { clearInterval(window.__PC_WATCHDOG__); delete window.__PC_WATCHDOG__; } } catch {}
     if (remoteVideo) remoteVideo.srcObject = null;
 
     // Reset buttons and UI to allow starting a new call immediately.
@@ -879,6 +925,7 @@ let calleeArmed = false;
     }
     if (btnAnswer) btnAnswer.classList.add('hidden');
     if (shareWrap) shareWrap.classList.add('hidden');
+    setHangBig(false);
     const peerEnded = (reason === 'peer-bye');
     setStatusKey(peerEnded ? 'call.ended_by_peer' : 'call.ended', peerEnded ? 'ok' : 'warn-txt');
     if (noteEl) noteEl.textContent = '';
@@ -889,6 +936,7 @@ let calleeArmed = false;
     if (btnAnswer) btnAnswer.classList.add('hidden');
     // allow re-binding state watchers for next call
     try { delete window.__PC_WATCH_PC__; } catch {}
+    try { window.__PC_UI_FLIPPED__ = false; } catch {}
     try { window.__PC_UI_FLIPPED__ = false; } catch {}
   }
 
@@ -970,8 +1018,15 @@ let calleeArmed = false;
     try { wsSend('ready', { roomId, clientId: window.__CLIENT_ID }); } catch {}
   };
 
-  // Handler for "Hang Up" button: clean up the call.
-  if (btnHang) btnHang.onclick = () => doCleanup('user-hangup');
+  // Handler for "Hang Up" button: clean up the call, single-shot and disables button immediately.
+  if (btnHang) btnHang.onclick = () => {
+    if (hangInProgress) return;
+    hangInProgress = true;
+    try { btnHang.disabled = true; } catch {}
+    doCleanup('user-hangup');
+    // allow subsequent calls after UI resets
+    setTimeout(() => { hangInProgress = false; }, 1200);
+  };
 
   // Handler for "Native Share" button: share the room link using the browser's native share dialog.
   if (btnNativeShare) btnNativeShare.onclick = () => {
@@ -1023,10 +1078,8 @@ let calleeArmed = false;
   };
 
   if (btnMicToggle) btnMicToggle.onclick = () => {
-    if (audioEl) audioEl.muted = !audioEl.muted;
-    if (noteEl) noteEl.textContent = audioEl && audioEl.muted
-      ? i18next.t('call.ended')
-      : i18next.t('common.ready');
+    const next = !getLocalMicMuted();
+    setLocalMicMuted(next);
   };
 
   window.addEventListener('beforeunload', () => {
