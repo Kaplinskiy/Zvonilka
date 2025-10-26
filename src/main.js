@@ -203,6 +203,15 @@ function renderLangSwitch(active) {
     return !s || !s.track ? false : (s.track.enabled === false);
   }
 
+  // --- LOCAL VIDEO SENDER HELPERS ---
+  function getLocalVideoSender() {
+    try {
+      const pc = (window.getPC && window.getPC());
+      if (!pc || !pc.getSenders) return null;
+      return pc.getSenders().find(s => s && s.track && s.track.kind === 'video') || null;
+    } catch { return null; }
+  }
+
   // Wait until TURN creds are loaded to avoid creating PC with empty ICE config
   async function waitTurnReady(timeoutMs = 6000) {
     const t0 = Date.now();
@@ -1077,8 +1086,48 @@ let hangInProgress = false;
 
   // --- APPLICATION BOOTSTRAP SEQUENCE ---
 
-  if (btnVideoToggle) btnVideoToggle.onclick = () => {
-    setVideoMode(!__videoMode);
+  if (btnVideoToggle) btnVideoToggle.onclick = async () => {
+    try {
+      // Only caller can initiate video renegotiation in current signaling design
+      if (role !== 'caller') {
+        setStatusKey('video.only_caller_can_start', 'warn');
+        return;
+      }
+
+      // If no video sender yet → first activation: capture cam, attach, renegotiate
+      const vs = getLocalVideoSender();
+      if (!vs || !vs.track) {
+        try { await (window.__TURN_PROMISE__ || Promise.resolve()); } catch {}
+        await waitTurnReady();
+        if (window.__WEBRTC__ && typeof window.__WEBRTC__.getCam === 'function') {
+          await window.__WEBRTC__.getCam();
+        }
+        if (window.__WEBRTC__ && typeof window.__WEBRTC__.ensureVideoSender === 'function') {
+          await window.__WEBRTC__.ensureVideoSender();
+        }
+        // Caller sends offer; negotiationneeded should also trigger, but this is a safety net
+        if (typeof window.sendOfferIfPossible === 'function') {
+          try { await window.sendOfferIfPossible(); } catch {}
+        }
+        setVideoMode(true);
+        try { btnVideoToggle.setAttribute('aria-pressed', 'true'); } catch {}
+        return;
+      }
+
+      // Subsequent toggles: no renegotiation, just enable/disable
+      const next = !vs.track.enabled;
+      try { vs.track.enabled = next; } catch {}
+      setVideoMode(next);
+      try { btnVideoToggle.setAttribute('aria-pressed', next ? 'true' : 'false'); } catch {}
+      if (!next) {
+        if (noteEl) noteEl.textContent = i18next.t('video.off');
+      } else {
+        if (noteEl) noteEl.textContent = i18next.t('video.on');
+      }
+    } catch (e) {
+      console.error('[VIDEO] toggle failed', e && (e.message || String(e)));
+      setStatusKey('error.video_toggle_failed', 'err');
+    }
   };
 
   if (btnCamFlip) btnCamFlip.onclick = () => {

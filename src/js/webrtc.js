@@ -142,6 +142,49 @@
     }
   }
 
+  async function getCam() {
+    // Acquire camera and merge tracks into localStream
+    try {
+      const camStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+      if (localStream) {
+        // merge video tracks into the existing localStream to keep a single stream reference
+        for (const t of (camStream.getVideoTracks ? camStream.getVideoTracks() : [])) {
+          try { localStream.addTrack(t); } catch (_) {}
+        }
+      } else {
+        localStream = camStream;
+      }
+      log.ui('cam ok');
+      return localStream;
+    } catch (e) {
+      log.e('cam error', e);
+      throw e;
+    }
+  }
+
+  async function ensureVideoSender() {
+    if (!pc || !localStream) return;
+    const track = (localStream.getVideoTracks && localStream.getVideoTracks()[0]) || null;
+    if (!track) return;
+    try { track.enabled = true; } catch (_) {}
+
+    const existing = pc.getSenders ? pc.getSenders().find(s => s.track && s.track.kind === 'video') : null;
+    if (existing) {
+      try { await existing.replaceTrack(track); log.d('sender: replaced video track'); } catch (e) { log.w('video replace error', e); }
+      return;
+    }
+    try {
+      const tx = pc.getTransceivers && pc.getTransceivers().find(t => t.receiver && t.receiver.track && t.receiver.track.kind === 'video');
+      if (!tx) pc.addTransceiver('video', { direction: 'sendrecv' });
+      pc.addTrack(track, localStream);
+      log.d('sender: added video');
+    } catch (e) {
+      log.e('video add failed', e);
+    }
+  }
+
   async function ensureAudioSender() {
     if (!pc || !localStream) return;
     const track = (localStream.getAudioTracks && localStream.getAudioTracks()[0]) || null;
@@ -256,8 +299,12 @@
     try {
       const r = getRole();
       if (r === 'caller') {
-        const tx = pc.getTransceivers ? pc.getTransceivers()[0] : null;
-        if (!tx) pc.addTransceiver('audio', { direction: 'sendrecv' });
+        // audio
+        const hasAudio = pc.getTransceivers && pc.getTransceivers().some(t => (t.receiver && t.receiver.track && t.receiver.track.kind === 'audio') || t.mid === '0');
+        if (!hasAudio) pc.addTransceiver('audio', { direction: 'sendrecv' });
+        // video
+        const hasVideo = pc.getTransceivers && pc.getTransceivers().some(t => t.receiver && t.receiver.track && t.receiver.track.kind === 'video');
+        if (!hasVideo) pc.addTransceiver('video', { direction: 'sendrecv' });
       }
     } catch (_) {}
 
@@ -390,7 +437,7 @@
   }
   window.addRemoteIce = addRemoteIce;
   // Public API
-  window.__WEBRTC__ = { getPC, createPC, getMic, sendOfferIfPossible, acceptIncoming, addRemoteIce, cleanup };
+  window.__WEBRTC__ = { getPC, createPC, getMic, getCam, ensureVideoSender, sendOfferIfPossible, acceptIncoming, addRemoteIce, cleanup };
   window.getPC = window.getPC || getPC;
   window.sendOfferIfPossible = window.sendOfferIfPossible || sendOfferIfPossible;
   window.acceptIncoming = window.acceptIncoming || acceptIncoming;
