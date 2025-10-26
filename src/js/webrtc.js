@@ -348,8 +348,17 @@
     try {
       await getMic();
       await ensureAudioSender();
+
+      // If a local video track exists (user pressed Video), ensure it's attached before creating the offer
+      try {
+        const vts = (localStream && localStream.getVideoTracks) ? localStream.getVideoTracks() : [];
+        if (vts && vts.length) {
+          await ensureVideoSender();
+        }
+      } catch (_) {}
+
       try { await pc.getStats(); } catch (_) {}
-      const offer = await pc.createOffer({ offerToReceiveAudio: 1 });
+      const offer = await pc.createOffer({ offerToReceiveAudio: 1, offerToReceiveVideo: 1 });
       await pc.setLocalDescription(offer);
       console.log('[OFFER] setLocal ok; gather=', pc.iceGatheringState);
 
