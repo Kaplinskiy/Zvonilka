@@ -292,6 +292,12 @@ function renderLangSwitch(active) {
           if (btnCall) btnCall.classList.add('hidden');
           if (btnAnswer) btnAnswer.classList.add('hidden');
           if (btnHang) btnHang.disabled = false;
+          // Inserted: hide shareWrap and start audio viz
+          if (shareWrap) shareWrap.classList.add('hidden');
+          try {
+            const s = (audioEl && audioEl.srcObject) || (__remoteStream || null);
+            if (s) { startAudioViz(s); }
+          } catch {}
           if (audioEl) { audioEl.muted = false; try { audioEl.play(); } catch {} }
         } else if (st === 'disconnected' || st === 'failed') {
           setStatusKey('call.ended', 'warn-txt');
@@ -304,6 +310,8 @@ function renderLangSwitch(active) {
         if (cs === 'connected') {
           setStatusKey('status.in_call', 'ok');
           if (btnHang) btnHang.disabled = false;
+          // Inserted: hide shareWrap
+          if (shareWrap) shareWrap.classList.add('hidden');
         }
       };
     } catch {}
@@ -809,7 +817,7 @@ let calleeArmed = false;
       logT('webrtc', 'webrtc.remote_track');
     });
     installPcStateWatch();
-    setStatusKey('room.ready_share_link', 'ok');
+    // Removed: setStatusKey('room.ready_share_link', 'ok');
     if (btnHang) btnHang.disabled = false;
   }
 
@@ -920,7 +928,7 @@ let calleeArmed = false;
       await connectWS('caller', roomId, onSignal);
 
       if (btnHang) btnHang.disabled = false;
-      setStatusKey('room.ready_share_link', 'ok');
+      // Removed: setStatusKey('room.ready_share_link', 'ok');
     } catch (e) {
       console.warn('[CALLER] start failed:', e && (e.message || String(e)));
       setStatusKey(i18next.t('error.room_create_failed'), 'err');
