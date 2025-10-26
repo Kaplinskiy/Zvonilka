@@ -574,6 +574,13 @@ let calleeArmed = false;
                 try { await startAudioViz(s); } catch {}
                 logT('webrtc','webrtc.remote_track');
               });
+              // Flush any ICE buffered before remoteDescription was applied (callee)
+              try {
+                const buf = Array.isArray(window.__REMOTE_ICE_Q) ? window.__REMOTE_ICE_Q.splice(0) : [];
+                for (const c of buf) {
+                  try { await addRemoteIce(c); } catch {}
+                }
+              } catch {}
               pendingOffer = null;
               if (btnHang) btnHang.disabled = false;
               setStatusKey('common.ready', 'ok');
@@ -608,6 +615,13 @@ let calleeArmed = false;
               break;
             }
             await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp }));
+            // Flush any ICE buffered before remoteDescription was applied
+            try {
+              const buf = Array.isArray(window.__REMOTE_ICE_Q) ? window.__REMOTE_ICE_Q.splice(0) : [];
+              for (const c of buf) {
+                try { await addRemoteIce(c); } catch {}
+              }
+            } catch {}
             try { console.log('[SIGNAL] setRemoteDescription(answer) ok; signalingState=', pc.signalingState); } catch {}
           } catch (e) {
             console.error('[SIGNAL] apply answer failed', e && (e.message || String(e)));
@@ -678,11 +692,15 @@ let calleeArmed = false;
           // String -> RTCIceCandidateInit
           if (typeof cand === 'string') cand = { candidate: cand };
 
-          // Unwrap {candidate:{...}} to inner object
-          if (cand && typeof cand === 'object' && cand.candidate && !cand.sdpMid && !cand.sdpMLineIndex) {
-            cand = cand.candidate;
-          }
-
+          // If remoteDescription is not yet applied, buffer into the shared queue
+          try {
+            const pcw = (window.getPC && window.getPC());
+            if (!pcw || !pcw.remoteDescription) {
+              window.__REMOTE_ICE_Q = Array.isArray(window.__REMOTE_ICE_Q) ? window.__REMOTE_ICE_Q : [];
+              window.__REMOTE_ICE_Q.push(cand);
+              break;
+            }
+          } catch {}
 
           if (cand && typeof cand === 'object') {
             try { await addRemoteIce(cand); }

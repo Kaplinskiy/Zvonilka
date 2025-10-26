@@ -367,12 +367,6 @@
         s.forEach(r=>{ if(r.type==='local-candidate') locals.push(r); if(r.type==='remote-candidate') rems.push(r); });
         console.log('[ICE-CANDS] after-gather-offer', {localCount: locals.length, remoteCount: rems.length, locals: locals.map(x=>({type:x.candidateType, proto:x.protocol, ip:x.ip||x.address})), remotes: rems.map(x=>({type:x.candidateType, proto:x.protocol, ip:x.ip||x.address}))});
       } catch(_){}
-      // flush queued ICE
-      while (remoteIceQueue.length) {
-        const c = remoteIceQueue.shift();
-        try { await pc.addIceCandidate(typeof c === 'string' ? { candidate: c } : c); }
-        catch (_) { /* ignore */ }
-      }
     } catch (e) {
       console.error('[ACCEPT] error', e);
     }
