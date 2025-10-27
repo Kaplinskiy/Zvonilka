@@ -240,7 +240,12 @@
     if (!window.__AUDIO_RESUME_BOUND__) {
       window.__AUDIO_RESUME_BOUND__ = true;
       const resume = () => { try { a.play && a.play(); } catch (_) {} };
-      window.addEventListener('click', () => { resume(); }, { once: true, capture: true });
+      ['click','touchstart','pointerdown','keydown'].forEach(evt => {
+        try { window.addEventListener(evt, () => { resume(); }, { once: true, capture: true }); } catch(_) {}
+      });
+      try {
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) resume(); }, { once: true });
+      } catch(_) {}
     }
     return a;
   }
