@@ -310,18 +310,27 @@
       console.log('[TRACK]', { kind: e.track && e.track.kind, ready: e.track && e.track.readyState, streams: (e.streams||[]).length });
       dumpRtp('ontrack');
       const s = (e.streams && e.streams[0]) || (e.track ? new MediaStream([e.track]) : null);
+      const kind = e.track && e.track.kind;
+
+      // Передаём наружу сразу, чтобы UI мог различить по kind
       if (onTrackCb && s) onTrackCb(s);
-      const a = ensureRemoteAudioElement();
-      a.srcObject = s; a.muted = false; a.play && a.play().catch(()=>{});
-      // Optionally bind to a remote video element if present
-      try {
-        const rv = document.getElementById('remoteVideo');
-        if (rv && rv !== document.getElementById('localPreview')) {
-          if (!rv.srcObject || rv.srcObject !== s) rv.srcObject = s;
-          rv.autoplay = true; rv.playsInline = true; rv.muted = false;
-          rv.play && rv.play().catch(()=>{});
-        }
-      } catch(_) {}
+
+      if (kind === 'audio') {
+        const a = ensureRemoteAudioElement();
+        a.srcObject = s;
+        a.muted = false;
+        a.play && a.play().catch(()=>{});
+      } else if (kind === 'video') {
+        // Привязываем только к видеоэлементу, аудио не трогаем
+        try {
+          const rv = document.getElementById('remoteVideo');
+          if (rv && rv !== document.getElementById('localPreview')) {
+            if (!rv.srcObject || rv.srcObject !== s) rv.srcObject = s;
+            rv.autoplay = true; rv.playsInline = true; rv.muted = false;
+            rv.play && rv.play().catch(()=>{});
+          }
+        } catch(_) {}
+      }
       if (tid && !window.__LOGGED_TRACK_IDS) window.__LOGGED_TRACK_IDS = new Set();
       if (tid && window.__LOGGED_TRACK_IDS.has(tid)) return;
       if (tid) window.__LOGGED_TRACK_IDS.add(tid);
