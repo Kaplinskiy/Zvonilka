@@ -372,6 +372,17 @@
         const vts = (localStream && localStream.getVideoTracks) ? localStream.getVideoTracks() : [];
         if (vts && vts.length) {
           await ensureVideoSender();
+          // Ensure video transceivers are set to sendrecv so offer includes m=video sendrecv
+          try {
+            if (pc && pc.getTransceivers) {
+              pc.getTransceivers().forEach(t => {
+                const kind = (t.receiver && t.receiver.track && t.receiver.track.kind) || (t.sender && t.sender.track && t.sender.track.kind) || '';
+                if (kind === 'video' && t.direction !== 'sendrecv') {
+                  try { t.direction = 'sendrecv'; } catch(_) {}
+                }
+              });
+            }
+          } catch(_) {}
         }
       } catch (_) {}
 
@@ -416,6 +427,17 @@
           console.log('[CALLEE] video armed before answer');
         }
       } catch (e) { console.warn('[CALLEE] video prepare failed', e); }
+      // Ensure video transceivers are set to sendrecv so answer includes m=video sendrecv
+      try {
+        if (getRole() === 'callee' && pc && pc.getTransceivers) {
+          pc.getTransceivers().forEach(t => {
+            const kind = (t.receiver && t.receiver.track && t.receiver.track.kind) || (t.sender && t.sender.track && t.sender.track.kind) || '';
+            if (kind === 'video' && t.direction !== 'sendrecv') {
+              try { t.direction = 'sendrecv'; } catch (_) {}
+            }
+          });
+        }
+      } catch(_) {}
       // Align transceiver direction after applying remote offer (callee)
       } catch (_) {}
       log.ui('remote offer applied');
