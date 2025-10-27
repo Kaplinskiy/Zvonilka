@@ -438,9 +438,14 @@
           });
         }
       } catch(_) {}
-      // Align transceiver direction after applying remote offer (callee)
-      } catch (_) {}
       log.ui('remote offer applied');
+      // Ensure a video transceiver exists for callee when arming video
+      try {
+        if (getRole() === 'callee' && window.__WANTS_VIDEO__ === true && pc && pc.getTransceivers) {
+          const hasVideoTx = pc.getTransceivers().some(t => (t.receiver && t.receiver.track && t.receiver.track.kind === 'video') || (t.sender && t.sender.track && t.sender.track.kind === 'video'));
+          if (!hasVideoTx) { pc.addTransceiver('video', { direction: 'sendrecv' }); }
+        }
+      } catch(_) {}
       await getMic();
       await ensureAudioSender();
       // Prime stats loop to kick ICE stack in some browsers
