@@ -800,10 +800,12 @@ let hangInProgress = false;
             await waitTurnReady();
             await getMic();
             offerAttempted = false;
-            if (typeof window.sendOfferIfPossible === 'function') {
+            if (window.__WEBRTC__ && typeof window.__WEBRTC__.requestOfferNow === 'function') {
+              await window.__WEBRTC__.requestOfferNow();
+            } else if (typeof window.sendOfferIfPossible === 'function') {
               await window.sendOfferIfPossible();
-              logT('webrtc','webrtc.offer_sent_caller');
             }
+            logT('webrtc','webrtc.offer_sent_caller');
           } catch (e) {
             logT('error','error.offer_send_failed',{ msg: (e?.message||String(e)) });
           }
@@ -1151,6 +1153,7 @@ let hangInProgress = false;
         await bindLocalPreview();
         try { btnVideoToggle.setAttribute('aria-pressed', 'true'); } catch {}
         setStatusKey('video.will_be_sent_in_answer', 'ok');
+        calleeArmed = true;
         return;
       }
 

@@ -18,6 +18,9 @@
   /** @type {Set<string>} */ const sentLocalIce = new Set();
   /** @type {boolean} */ let endOfCandidatesSent = false;
   /** @type {Set<string>} */ const __SEEN_TRACK_IDS = new Set();
+  /** @type {boolean} */ let __HAS_VIDEO_MLINE = false;
+  /** @type {number} */ let __LAST_NEED_OFFER_AT = 0;
+  const NEED_OFFER_COOLDOWN_MS = 1200;
 
   const NON_TRICKLE = false; // send full SDP after gathering (helps avoid one‑way audio on relay)
 
@@ -177,8 +180,8 @@
       return;
     }
     try {
-      const tx = pc.getTransceivers && pc.getTransceivers().find(t => t.receiver && t.receiver.track && t.receiver.track.kind === 'video');
-      if (!tx) pc.addTransceiver('video', { direction: 'sendrecv' });
+      const tx = pc.getTransceivers && pc.getTransceivers().find(t => (t.receiver && t.receiver.track && t.receiver.track.kind === 'video') || (t.sender && t.sender.track && t.sender.track.kind === 'video'));
+      if (!tx && !__HAS_VIDEO_MLINE) { pc.addTransceiver('video', { direction: 'sendrecv' }); __HAS_VIDEO_MLINE = true; }
       pc.addTrack(track, localStream);
       log.d('sender: added video');
     } catch (e) {
@@ -317,17 +320,24 @@
 
       if (kind === 'audio') {
         const a = ensureRemoteAudioElement();
-        a.srcObject = s;
+        if (a.srcObject !== s) {
+          try { a.pause && a.pause(); } catch(_) {}
+          a.srcObject = s;
+        }
         a.muted = false;
-        a.play && a.play().catch(()=>{});
+        setTimeout(() => { try { a.play && a.play(); } catch(_) {} }, 0);
       } else if (kind === 'video') {
         // Привязываем только к видеоэлементу, аудио не трогаем
         try {
           const rv = document.getElementById('remoteVideo');
           if (rv && rv !== document.getElementById('localPreview')) {
-            if (!rv.srcObject || rv.srcObject !== s) rv.srcObject = s;
+            if (rv.srcObject !== s) {
+              try { rv.pause && rv.pause(); } catch(_) {}
+              rv.srcObject = s;
+            }
             rv.autoplay = true; rv.playsInline = true; rv.muted = false;
-            rv.play && rv.play().catch(()=>{});
+            // queue play to next task to avoid AbortError on rapid srcObject swaps
+            setTimeout(() => { try { rv.play && rv.play(); } catch(_) {} }, 0);
           }
         } catch(_) {}
       }
@@ -345,8 +355,9 @@
         const hasAudio = pc.getTransceivers && pc.getTransceivers().some(t => (t.receiver && t.receiver.track && t.receiver.track.kind === 'audio') || t.mid === '0');
         if (!hasAudio) pc.addTransceiver('audio', { direction: 'sendrecv' });
         // video
-        const hasVideo = pc.getTransceivers && pc.getTransceivers().some(t => t.receiver && t.receiver.track && t.receiver.track.kind === 'video');
-        if (!hasVideo) pc.addTransceiver('video', { direction: 'sendrecv' });
+        const hasVideo = pc.getTransceivers && pc.getTransceivers().some(t => (t.receiver && t.receiver.track && t.receiver.track.kind === 'video') || (t.sender && t.sender.track && t.sender.track.kind === 'video'));
+        if (!hasVideo && !__HAS_VIDEO_MLINE) { pc.addTransceiver('video', { direction: 'sendrecv' }); __HAS_VIDEO_MLINE = true; }
+        else { __HAS_VIDEO_MLINE = true; }
       }
     } catch (_) {}
 
@@ -359,6 +370,10 @@
         if (offerInProgress) { console.log('[NEGOTIATION] skip, in-progress'); return; }
         sendOfferIfPossible();
       } else {
+        const now = Date.now();
+        if (offerInProgress) { console.log('[NEGOTIATION] callee skip: in-progress'); return; }
+        if (now - __LAST_NEED_OFFER_AT < NEED_OFFER_COOLDOWN_MS) { console.log('[NEGOTIATION] callee skip: cooldown'); return; }
+        __LAST_NEED_OFFER_AT = now;
         try { window.wsSend && window.wsSend('need-offer', {}); console.log('[NEGOTIATION] callee requested new offer'); } catch(_) {}
       }
     };
@@ -383,7 +398,7 @@
     if (r !== 'caller') { console.log('[OFFER] not caller'); return; }
     if (!pc) { console.warn('[OFFER] no pc'); return; }
     if (!wsReady()) { console.warn('[OFFER] ws not ready (no retry)'); return; }
-    if (!(pc.signalingState === 'stable' || pc.signalingState === 'have-local-offer')) { console.log('[OFFER] not stable:', pc.signalingState); return; }
+    if (pc.signalingState !== 'stable') { console.log('[OFFER] not stable:', pc.signalingState); return; }
 
     offerInProgress = true;
     try {
@@ -522,6 +537,8 @@
       sentLocalIce.clear();
       endOfCandidatesSent = false;
       offerSent = false; offerInProgress = false; remoteIceQueue.length = 0;
+      __HAS_VIDEO_MLINE = false;
+      __LAST_NEED_OFFER_AT = 0;
       window.addLog && window.addLog('info', 'cleanup ' + (reason || ''));
     } catch (_) {}
   }
