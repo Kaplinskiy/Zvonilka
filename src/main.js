@@ -330,6 +330,22 @@ function renderLangSwitch(active) {
     } catch {}
   }
 
+  async function ensureRemoteAudioBinding(){
+    try {
+      const pc = (window.getPC && window.getPC());
+      if (!pc || !pc.getReceivers) return;
+      const rx = pc.getReceivers().map(r=>r && r.track).filter(t=>t && t.kind==='audio');
+      if (!rx.length) return;
+      const s = new MediaStream([rx[0]]);
+      if (audioEl) {
+        if (audioEl.srcObject !== s) { try { audioEl.pause?.(); } catch {} audioEl.srcObject = s; }
+        audioEl.autoplay = true; audioEl.playsInline = true; audioEl.muted = false;
+        setTimeout(()=>{ try { audioEl.play?.(); } catch {} }, 0);
+      }
+      try { await startAudioViz(s); } catch {}
+    } catch {}
+  }
+
   function stopAudioViz(){
     try { if (__audioViz.raf) cancelAnimationFrame(__audioViz.raf); } catch {}
     try { if (__audioViz.ctx) __audioViz.ctx.close(); } catch {}
@@ -386,6 +402,7 @@ function renderLangSwitch(active) {
         try { addLog('webrtc', 'oniceconnectionstatechange:' + st); } catch {}
         if (st === 'connected') {
           flipInCallUI();
+          ensureRemoteAudioBinding();
         } else if (st === 'disconnected' || st === 'failed') {
           setStatusKey('call.ended', 'warn-txt');
           try { doCleanup('peer-bye'); } catch {}
@@ -397,6 +414,7 @@ function renderLangSwitch(active) {
         try { addLog('webrtc', 'connection=' + cs); } catch {}
         if (cs === 'connected') {
           flipInCallUI();
+          ensureRemoteAudioBinding();
         }
       };
 
@@ -404,6 +422,7 @@ function renderLangSwitch(active) {
       try {
         if ((pc.iceConnectionState === 'connected' || pc.connectionState === 'connected') && !window.__PC_UI_FLIPPED__) {
           flipInCallUI();
+          ensureRemoteAudioBinding();
         }
       } catch {}
 
@@ -788,6 +807,7 @@ let hangInProgress = false;
             } catch {}
             // Ensure caller UI is flipped to in-call after SDP answer is applied
             try { if (!window.__PC_UI_FLIPPED__) flipInCallUI(); } catch {}
+            try { await ensureRemoteAudioBinding(); } catch {}
             try { console.log('[SIGNAL] setRemoteDescription(answer) ok; signalingState=', pc.signalingState); } catch {}
           } catch (e) {
             console.error('[SIGNAL] apply answer failed', e && (e.message || String(e)));
@@ -1076,6 +1096,7 @@ let hangInProgress = false;
     }
     role = 'callee'; window.role = 'callee'; roomId = rid;
     if (!isWSOpen()) await connectWS('callee', roomId, onSignal);
+    try { if (audioEl) { audioEl.autoplay = true; audioEl.playsInline = true; audioEl.muted = false; audioEl.play?.(); } } catch {}
     if (typeof window.loadTurnConfig === 'function') {
       try { await window.loadTurnConfig(true); } catch {}
     }
