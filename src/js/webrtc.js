@@ -455,6 +455,7 @@
       try {
         const tx0 = pc.getTransceivers && pc.getTransceivers()[0];
         if (tx0 && tx0.direction !== 'sendrecv') tx0.direction = 'sendrecv';
+      } catch (_) {}
       await logSelectedPair('after-setLocal-answer');
       // (local candidates wait and ICE restart removed)
       if (NON_TRICKLE) await waitIceComplete(pc, 2500);
