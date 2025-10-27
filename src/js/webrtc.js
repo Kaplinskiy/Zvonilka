@@ -308,6 +308,15 @@
       if (onTrackCb && s) onTrackCb(s);
       const a = ensureRemoteAudioElement();
       a.srcObject = s; a.muted = false; a.play && a.play().catch(()=>{});
+      // Optionally bind to a remote video element if present
+      try {
+        const rv = document.getElementById('remoteVideo');
+        if (rv && rv !== document.getElementById('localPreview')) {
+          if (!rv.srcObject || rv.srcObject !== s) rv.srcObject = s;
+          rv.autoplay = true; rv.playsInline = true; rv.muted = false;
+          rv.play && rv.play().catch(()=>{});
+        }
+      } catch(_) {}
       if (tid && !window.__LOGGED_TRACK_IDS) window.__LOGGED_TRACK_IDS = new Set();
       if (tid && window.__LOGGED_TRACK_IDS.has(tid)) return;
       if (tid) window.__LOGGED_TRACK_IDS.add(tid);
@@ -333,7 +342,7 @@
       console.log('[NEGOTIATION] event role=', r, 'wsReady=', wsReady());
       if (!wsReady()) { console.log('[NEGOTIATION] ws not ready (no retry)'); return; }
       if (r === 'caller') {
-        if (offerInProgress || offerSent) { console.log('[NEGOTIATION] skip, already handled'); return; }
+        if (offerInProgress) { console.log('[NEGOTIATION] skip, in-progress'); return; }
         sendOfferIfPossible();
       } else {
         try { window.wsSend && window.wsSend('need-offer', {}); console.log('[NEGOTIATION] callee requested new offer'); } catch(_) {}
@@ -391,8 +400,8 @@
       await pc.setLocalDescription(offer);
       console.log('[OFFER] setLocal ok; gather=', pc.iceGatheringState);
 
-      // Send offer immediately once
-      if (wsReady() && typeof window.wsSend === 'function' && !offerSent) {
+      // Send offer now (always allow on each call; upper layers control throttling)
+      if (wsReady() && typeof window.wsSend === 'function') {
         window.wsSend('offer', pc.localDescription);
         offerSent = true; offerPrepared = false; window.__SEND_OFFER_ONCE__ = true; log.ui('send offer');
       }
