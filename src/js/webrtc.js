@@ -17,6 +17,7 @@
   /** @type {RTCIceCandidateInit[]} */ const remoteIceQueue = (Array.isArray(window.__REMOTE_ICE_Q) ? window.__REMOTE_ICE_Q : (window.__REMOTE_ICE_Q = []));
   /** @type {Set<string>} */ const sentLocalIce = new Set();
   /** @type {boolean} */ let endOfCandidatesSent = false;
+  /** @type {Set<string>} */ const __SEEN_TRACK_IDS = new Set();
 
   const NON_TRICKLE = false; // send full SDP after gathering (helps avoid one‑way audio on relay)
 
@@ -297,7 +298,21 @@
     };
     pc.oniceconnectionstatechange = () => { const st = pc.iceConnectionState; dumpRtp('oniceconnectionstatechange:'+st); logSelectedPair('onice:'+st); log.ui('ice=' + st); };
     pc.onconnectionstatechange = () => { log.d('connection=' + pc.connectionState); };
-    pc.ontrack = (e) => { console.log('[TRACK]', { kind: e.track && e.track.kind, ready: e.track && e.track.readyState, streams: (e.streams||[]).length }); dumpRtp('ontrack'); const s = (e.streams && e.streams[0]) || (e.track ? new MediaStream([e.track]) : null); if (onTrackCb && s) onTrackCb(s); const a = ensureRemoteAudioElement(); a.srcObject = s; a.muted = false; a.play && a.play().catch(()=>{}); log.ui('webrtc.remote_track'); };
+    pc.ontrack = (e) => {
+      const tid = e && e.track && e.track.id;
+      if (tid && __SEEN_TRACK_IDS.has(tid)) return;
+      if (tid) __SEEN_TRACK_IDS.add(tid);
+      console.log('[TRACK]', { kind: e.track && e.track.kind, ready: e.track && e.track.readyState, streams: (e.streams||[]).length });
+      dumpRtp('ontrack');
+      const s = (e.streams && e.streams[0]) || (e.track ? new MediaStream([e.track]) : null);
+      if (onTrackCb && s) onTrackCb(s);
+      const a = ensureRemoteAudioElement();
+      a.srcObject = s; a.muted = false; a.play && a.play().catch(()=>{});
+      if (tid && !window.__LOGGED_TRACK_IDS) window.__LOGGED_TRACK_IDS = new Set();
+      if (tid && window.__LOGGED_TRACK_IDS.has(tid)) return;
+      if (tid) window.__LOGGED_TRACK_IDS.add(tid);
+      log.ui('webrtc.remote_track');
+    };
 
     // Pre-provision only for CALLER; callee waits for remote offer to define m-lines
     try {
@@ -316,10 +331,13 @@
     pc.onnegotiationneeded = () => {
       const r = getRole();
       console.log('[NEGOTIATION] event role=', r, 'wsReady=', wsReady());
-      if (r !== 'caller') return;
       if (!wsReady()) { console.log('[NEGOTIATION] ws not ready (no retry)'); return; }
-      if (offerInProgress || offerSent) { console.log('[NEGOTIATION] skip, already handled'); return; }
-      sendOfferIfPossible();
+      if (r === 'caller') {
+        if (offerInProgress || offerSent) { console.log('[NEGOTIATION] skip, already handled'); return; }
+        sendOfferIfPossible();
+      } else {
+        try { window.wsSend && window.wsSend('need-offer', {}); console.log('[NEGOTIATION] callee requested new offer'); } catch(_) {}
+      }
     };
 
     // Attach any pre-existing local tracks
@@ -390,10 +408,15 @@
       const sdp = typeof offer === 'string' ? offer : (offer.sdp || (offer.payload && offer.payload.sdp) || (offer.offer && offer.offer.sdp) || '');
       await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp }));
       await logSelectedPair('after-setRemote-offer');
-      // Align transceiver direction after applying remote offer (callee)
+      // If callee pre-armed video (pressed Video before offer) attach it before creating answer
       try {
-        const tx0 = pc.getTransceivers && pc.getTransceivers()[0];
-        if (tx0 && tx0.direction !== 'sendrecv') tx0.direction = 'sendrecv';
+        if (getRole() === 'callee' && window.__WANTS_VIDEO__ === true) {
+          await getCam();
+          await ensureVideoSender();
+          console.log('[CALLEE] video armed before answer');
+        }
+      } catch (e) { console.warn('[CALLEE] video prepare failed', e); }
+      // Align transceiver direction after applying remote offer (callee)
       } catch (_) {}
       log.ui('remote offer applied');
       await getMic();
@@ -402,6 +425,9 @@
       try { await pc.getStats(); } catch (_) {}
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
+      try {
+        const tx0 = pc.getTransceivers && pc.getTransceivers()[0];
+        if (tx0 && tx0.direction !== 'sendrecv') tx0.direction = 'sendrecv';
       await logSelectedPair('after-setLocal-answer');
       // (local candidates wait and ICE restart removed)
       if (NON_TRICKLE) await waitIceComplete(pc, 2500);

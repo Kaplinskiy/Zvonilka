@@ -794,6 +794,21 @@ let hangInProgress = false;
           }
           break;
         }
+        case 'need-offer': {
+          try {
+            if (role !== 'caller') break;
+            await waitTurnReady();
+            await getMic();
+            offerAttempted = false;
+            if (typeof window.sendOfferIfPossible === 'function') {
+              await window.sendOfferIfPossible();
+              logT('webrtc','webrtc.offer_sent_caller');
+            }
+          } catch (e) {
+            logT('error','error.offer_send_failed',{ msg: (e?.message||String(e)) });
+          }
+          break;
+        }
         case 'renegotiate': {
           try {
             logT('signal', 'debug.signal_recv_renegotiate');
@@ -1121,9 +1136,21 @@ let hangInProgress = false;
 
   if (btnVideoToggle) btnVideoToggle.onclick = async () => {
     try {
-      // Only caller can initiate video renegotiation in current signaling design
+      // Callee: армируем видео до прихода оффера (в answer попадёт m=video)
       if (role !== 'caller') {
-        setStatusKey('video.only_caller_can_start', 'warn');
+        window.__WANTS_VIDEO__ = true;
+        try { await (window.__TURN_PROMISE__ || Promise.resolve()); } catch {}
+        await waitTurnReady();
+        if (window.__WEBRTC__ && typeof window.__WEBRTC__.getCam === 'function') {
+          await window.__WEBRTC__.getCam();
+        }
+        if (window.__WEBRTC__ && typeof window.__WEBRTC__.ensureVideoSender === 'function') {
+          await window.__WEBRTC__.ensureVideoSender();
+        }
+        setVideoMode(true);
+        await bindLocalPreview();
+        try { btnVideoToggle.setAttribute('aria-pressed', 'true'); } catch {}
+        setStatusKey('video.will_be_sent_in_answer', 'ok');
         return;
       }
 
