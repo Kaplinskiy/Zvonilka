@@ -143,47 +143,6 @@ function renderLangSwitch(active) {
   }
 
   /**
-   * Attempt to auto-answer an incoming offer for the callee when all preconditions are met.
-   * Respects ongoing answers and waits for signaling, TURN, and media readiness.
-   */
-  async function autoAnswerIfReady() {
-    try {
-      if (role !== 'callee') return;
-      if (answerInProgress) return;
-      const offer = pendingOffer || window.__PENDING_OFFER || window.__LAST_OFFER || null;
-      if (!offer) return;
-      if (!(window.ws && window.ws.readyState === 1)) return; // ждём OPEN
-
-      // ensure TURN + mic + PC
-      try { await (window.__TURN_PROMISE__ || Promise.resolve()); } catch {}
-      await waitTurnReady();
-      await getMic();
-      if (!window.getPC || !window.getPC()) {
-        await createPC(async (s) => {
-          if (audioEl) { audioEl.muted = false; audioEl.srcObject = s; try { await audioEl.play(); } catch {} }
-          bindRemoteStream(s);
-          try { await startAudioViz(s); } catch {}
-          logT('webrtc', 'webrtc.remote_track');
-        });
-      }
-
-      answerInProgress = true;
-      await acceptIncoming(offer, async (s) => {
-        if (audioEl) { audioEl.muted = false; audioEl.srcObject = s; try { await audioEl.play(); } catch {} }
-        bindRemoteStream(s);
-        try { await startAudioViz(s); } catch {}
-        logT('webrtc', 'webrtc.remote_track');
-      });
-      pendingOffer = null; window.__PENDING_OFFER = null;
-      if (btnHang) btnHang.disabled = false;
-    } catch (e) {
-      try { console.warn('[AUTO-ANSWER] failed', e && (e.message || String(e))); } catch {}
-    } finally {
-      answerInProgress = false;
-    }
-  }
-
-  /**
    * Toggle the video UI layout and sync remote/local preview visibility.
    * @param {boolean} on - Whether video mode should be active.
    */
@@ -509,7 +468,6 @@ function renderLangSwitch(active) {
   const shareLinkEl = document.getElementById('shareLink');
   const btnNativeShare = document.getElementById('btnNativeShare');
   const btnCopy = document.getElementById('btnCopy');
-  const btnCopyDiag = document.getElementById('btnCopyDiag');
 
   // --- GLOBAL HELPERS FROM WINDOW (provide fallbacks if missing) ---
   /**
@@ -577,7 +535,6 @@ function renderLangSwitch(active) {
   const getMic = window.getMic || (async () => {});
   const createPC = window.createPC || (() => {});
   const acceptIncoming = window.acceptIncoming || (async () => {});
-  const applyAnswer = window.applyAnswer || (async () => {});
   const addRemoteIce = window.addRemoteIce || (async () => {});
   const cleanupRTC = window.cleanup || (() => {});
 
@@ -589,84 +546,11 @@ function renderLangSwitch(active) {
   let roomId = null, memberId = null, role = null, pingTimer = null;
   // expose role to webrtc (it reads window.role)
   window.role = null;
-  window.__ALLOW_OFFER__ = false;
   window.__CLIENT_ID = (Date.now().toString(36) + '-' + Math.random().toString(36).slice(2));
 let pendingOffer = null;
-let answerInProgress = false;
 let offerAttempted = false;
 let calleeArmed = false;
 let hangInProgress = false;
-
-  /**
-   * Attempt a single immediate offer send, used when caller flow arms quickly.
-   * Waits briefly for stable signaling before delegating to sendOfferIfPossible.
-   * @param {number} [maxWaitMs=3000] - Maximum wait time before giving up.
-   * @returns {Promise<boolean>} True when an offer was requested.
-   */
-  async function sendInitialOfferOnce(maxWaitMs = 3000) {
-    // 1) ensure WS is OPEN
-    try { await (typeof waitWSOpen === 'function' ? waitWSOpen(1500) : Promise.resolve()); } catch {}
-    // 2) wait briefly until PC is stable or has local offer
-    const t0 = Date.now();
-    while (Date.now() - t0 < maxWaitMs) {
-      const pc = (window.getPC && window.getPC());
-      const st = pc && pc.signalingState;
-      if (pc && (st === 'stable' || st === 'have-local-offer' || !st)) break;
-      await new Promise(r => setTimeout(r, 100));
-    }
-    // 3) send offer once
-    if (typeof window.sendOfferIfPossible === 'function') {
-      console.debug('[CALLER] direct sendOfferIfPossible()');
-      await window.sendOfferIfPossible();
-      return true;
-    }
-    console.warn('[CALLER] sendOfferIfPossible missing');
-    return false;
-  }
-
-  /**
-   * Retry until WebSocket and peer connection are ready, then fire sendOfferIfPossible.
-   * @param {number} [maxMs=10000] - Maximum time to keep retrying.
-   * @returns {Promise<boolean>} True when an offer attempt was made.
-   */
-  async function triggerOfferWhenReady(maxMs = 10000) {
-    const t0 = Date.now();
-    let pcCreatedOnce = false;
-    while (Date.now() - t0 < maxMs) {
-      try {
-        // ensure WS open
-        if (!(window.ws && window.ws.readyState === 1)) {
-          if (typeof waitWSOpen === 'function') {
-            try { await waitWSOpen(800); } catch {}
-          } else {
-            await new Promise(r => setTimeout(r, 120));
-          }
-        }
-        const wsReadyNow = !!(window.ws && window.ws.readyState === 1);
-        // ensure PC exists
-        let pc = (window.getPC && window.getPC());
-        if (!pc && !pcCreatedOnce && typeof createPC === 'function') {
-          try { console.debug('[OFFER-TRIGGER] creating PC on demand'); createPC(() => {}); pcCreatedOnce = true; } catch {}
-          pc = (window.getPC && window.getPC());
-        }
-        const stable = pc && (!pc.signalingState || pc.signalingState === 'stable' || pc.signalingState === 'have-local-offer');
-        if (wsReadyNow && pc && stable) {
-          if (typeof window.sendOfferIfPossible === 'function') {
-            console.debug('[OFFER-TRIGGER] wsReady, pc ready (state=', pc.signalingState, ') → sendOfferIfPossible');
-            await window.sendOfferIfPossible();
-          }
-          return true;
-        }
-        // progress log every ~500ms
-        if ((Date.now() - t0) % 600 < 150) {
-          console.debug('[OFFER-TRIGGER] wait ws=', wsReadyNow, 'pc=', !!pc, 'state=', pc && pc.signalingState);
-        }
-      } catch {}
-      await new Promise(r => setTimeout(r, 150));
-    }
-    console.warn('[OFFER-TRIGGER] timeout waiting ws/pc');
-    return false;
-  }
 
   // install a verbose WS send wrapper once
   if (!window.__WS_SEND_WRAPPED && typeof window.wsSend === 'function') {
@@ -743,7 +627,6 @@ let hangInProgress = false;
             logT('signal', 'debug.signal_recv_member_joined');
             if (typeof role === 'string' && role !== 'caller') { break; }
             // caller: ждём явного сигнала 'ready' от callee; не готовим PC/медиа здесь
-            try { window.__OFFER_SENT__ = false; } catch {}
             offerAttempted = false;
             // ждём явного сигнала 'ready' от callee; оффер уйдёт в case 'ready'
           } catch (e) {
@@ -757,7 +640,6 @@ let hangInProgress = false;
             if (typeof window.loadTurnConfig === 'function') {
               try { await window.loadTurnConfig(true); } catch {}
             }
-            window.__ALLOW_OFFER__ = true;
             await waitTurnReady();
             await getMic();
             if (!window.getPC || !window.getPC()) {
@@ -919,7 +801,6 @@ let hangInProgress = false;
             await waitTurnReady();
             await getMic();
             // ensure we can send a new offer
-            try { window.__OFFER_SENT__ = false; } catch {}
             offerAttempted = false;
             // ensure PC is stable before offering
             try {
@@ -944,7 +825,6 @@ let hangInProgress = false;
               const payload = { type: 'offer', sdp: offer.sdp, offer: { type: 'offer', sdp: offer.sdp } };
               if (typeof window.wsSend === 'function') window.wsSend('offer', payload);
               logT('webrtc', 'webrtc.offer_sent_caller');
-              try { window.__OFFER_SENT__ = true; } catch {}
             }
           } catch (e) {
             logT('error', 'error.offer_send_failed', { msg: (e?.message || String(e)) });
@@ -1045,9 +925,7 @@ let hangInProgress = false;
    * @param {string} reason - Reason for cleanup, for logging.
    */
   function doCleanup(reason = 'user-hangup') {
-    try { window.__OFFER_SENT__ = false; } catch {}
     // reset session gates and TURN cache
-    try { window.__ALLOW_OFFER__ = false; } catch {}
     try { delete window.__TURN__; delete window.__TURN_PROMISE__; } catch {}
     calleeArmed = false;
     pendingOffer = null;
@@ -1129,16 +1007,6 @@ let hangInProgress = false;
     if (btnCall)   btnCall.classList.add('hidden');
     setStatusKey('ws.waiting_offer', 'ok');
 
-    // // Ensure WS is connected for callee and try immediate auto-answer if offer already arrived
-    // try {
-    //   if (!isWSOpen()) await connectWS('callee', roomId, onSignal);
-    //   // If TURN loader exists, kick it so we don't create PC with empty ICE later
-    //   try { await (window.__TURN_PROMISE__ || Promise.resolve()); } catch {}
-    //   // ждать оффер от caller; ответ пойдёт после нажатия кнопки или сигнала 'ready'
-    //   setStatusKey('signal.waiting_offer', 'warn');
-    // } catch (e) {
-    //   try { console.warn('[INIT callee] failed to connect/auto-answer:', e && (e.message || String(e))); } catch {}
-    // }
   }
 
   // --- BUTTON EVENT HANDLERS ---
@@ -1160,7 +1028,6 @@ let hangInProgress = false;
       await connectWS('caller', roomId, onSignal);
 
       if (btnHang) btnHang.disabled = false;
-      // Removed: setStatusKey('room.ready_share_link', 'ok');
     } catch (e) {
       console.warn('[CALLER] start failed:', e && (e.message || String(e)));
       setStatusKey(i18next.t('error.room_create_failed'), 'err');
@@ -1219,22 +1086,6 @@ let hangInProgress = false;
     }
   };
 
-  // Handler for "Copy Diagnostics" button: copy diagnostic info to the clipboard.
-  // if (btnCopyDiag) btnCopyDiag.onclick = async () => {
-  //   const report = [
-  //     '=== DIAG REPORT ===',
-  //     'url: ' + location.href,
-  //     'secure: ' + window.isSecureContext,
-  //     'protocol: ' + location.protocol,
-  //     'ua: ' + navigator.userAgent,
-  //     'getUserMedia: ' + !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
-  //     'RTCPeerConnection: ' + (typeof RTCPeerConnection),
-  //     'server: ' + SERVER_URL,
-  //     'ws: ' + WS_URL,
-  //     'room: ' + (roomId || parseRoom() || '-')
-  //   ].join('\n');
-  //   try { await navigator.clipboard.writeText(report); } catch { alert(report); }
-  // };
 
   // --- APPLICATION BOOTSTRAP SEQUENCE ---
 
@@ -1312,11 +1163,9 @@ let hangInProgress = false;
     try { wsClose(); } catch {}
     try { cleanupRTC('unload'); } catch {}
     try { delete window.__TURN__; delete window.__TURN_PROMISE__; } catch {}
-    window.__ALLOW_OFFER__ = false;
   });
   setStatusKey('status.initializing');
   try { renderEnv(); } catch {}
-  //logT('info', 'dev.client_loaded_vite');
   initByUrl();
 
   // Set initial visibility of buttons on page load based on room presence.

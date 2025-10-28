@@ -11,9 +11,7 @@
   // ---------- State ----------
   /** @type {RTCPeerConnection|null} */ let pc = null;
   /** @type {MediaStream|null} */ let localStream = null;
-  /** @type {boolean} */ let offerSent = false;
   /** @type {boolean} */ let offerInProgress = false;
-  /** @type {boolean} */ let offerPrepared = false; // localDescription is set, wait to send after candidates
   /** @type {RTCIceCandidateInit[]} */ const remoteIceQueue = (Array.isArray(window.__REMOTE_ICE_Q) ? window.__REMOTE_ICE_Q : (window.__REMOTE_ICE_Q = []));
   /** @type {Set<string>} */ const sentLocalIce = new Set();
   /** @type {boolean} */ let endOfCandidatesSent = false;
@@ -100,20 +98,6 @@
       if (target.iceGatheringState === 'complete') return;
       await delay(60);
     }
-  }
-
-  /**
-   * Wait for the signaling WebSocket to reach the OPEN state.
-   * @param {number} [ms=2000] - Maximum wait duration in milliseconds.
-   * @returns {Promise<boolean>} Resolves true when the socket is ready.
-   */
-  async function waitWsOpen(ms = 2000) {
-    const t0 = Date.now();
-    while (Date.now() < t0 + ms) {
-      if (wsReady()) return true;
-      await delay(50);
-    }
-    return false;
   }
 
   /**
@@ -502,7 +486,7 @@
       // Send offer now (always allow on each call; upper layers control throttling)
       if (wsReady() && typeof window.wsSend === 'function') {
         window.wsSend('offer', pc.localDescription);
-        offerSent = true; offerPrepared = false; window.__SEND_OFFER_ONCE__ = true; log.ui('send offer');
+        log.ui('send offer');
       }
 
       await logSelectedPair('after-setLocal-offer');
@@ -513,7 +497,7 @@
         console.log('[OFFER] local candidates in SDP:', candLines.length);
       } catch(_) {}
     } catch (e) {
-      offerSent = false; console.error('[OFFER] error', e);
+      console.error('[OFFER] error', e);
     } finally {
       offerInProgress = false;
       console.log('[OFFER] done; ice=', pc && pc.iceConnectionState);
@@ -637,7 +621,7 @@
       localStream = null;
       sentLocalIce.clear();
       endOfCandidatesSent = false;
-      offerSent = false; offerInProgress = false; remoteIceQueue.length = 0;
+      offerInProgress = false; remoteIceQueue.length = 0;
       __HAS_VIDEO_MLINE = false;
       __LAST_NEED_OFFER_AT = 0;
       window.addLog && window.addLog('info', 'cleanup ' + (reason || ''));
