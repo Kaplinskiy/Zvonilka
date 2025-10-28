@@ -148,7 +148,7 @@ function renderLangSwitch(active) {
    */
   function setVideoMode(on){
     __videoMode = !!on;
-    if (videoWrap) videoWrap.style.display = on ? 'block' : 'none';
+    if (videoWrap) videoWrap.style.display = on ? 'flex' : 'none';
     if (videoDock) videoDock.style.display = on ? 'flex' : 'none';
     if (on && remoteVideo && __remoteStream) remoteVideo.srcObject = __remoteStream;
     // also toggle local preview element if present
@@ -167,13 +167,8 @@ function renderLangSwitch(active) {
       el.id = 'localPreview';
       el.muted = true; el.autoplay = true; el.playsInline = true;
       el.setAttribute('playsinline','');
-      el.style.width = '160px';
-      el.style.height = '120px';
-      el.style.objectFit = 'cover';
-      el.style.borderRadius = '8px';
-      el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.25)';
-      el.style.background = '#000';
-      const host = videoDock || videoWrap || document.body;
+      el.className = 'local-preview';
+      const host = videoWrap || videoDock || document.body;
       host.appendChild(el);
     }
     return el;
