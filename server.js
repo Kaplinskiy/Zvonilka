@@ -25,7 +25,11 @@ const TURN_URLS = (process.env.TURN_URLS || 'turn.zababba.com')
 const _ttl = Number.parseInt(process.env.TURN_TTL || '120', 10);
 const TURN_TTL = Number.isFinite(_ttl) ? Math.min(Math.max(_ttl, 60), 3600) : 120;
 
-// Build canonical TURN URL set (TLS/TCP and UDP)
+/**
+ * Normalize a list of TURN endpoints into canonical TCP and UDP URLs.
+ * @param {string|string[]} urls - Raw TURN URL list from configuration.
+ * @returns {string[]} Canonicalized TURN URL strings.
+ */
 function buildTurnUrls(urls) {
   const out = new Set();
   const list = Array.isArray(urls) ? urls : (urls ? [urls] : []);
@@ -125,10 +129,20 @@ function addToRoom(roomId, ws) {
   ws._roomId = roomId; // internal property to track the room
 }
 
+/**
+ * Ensure tracking structures exist for a room (peers, ICE buffers).
+ * @param {string} roomId - Room identifier.
+ */
 function ensureRoomStruct(roomId) {
   if (!roomPeers.has(roomId)) roomPeers.set(roomId, { caller: null, callee: null });
   if (!iceBuffers.has(roomId)) iceBuffers.set(roomId, { toCaller: [], toCallee: [] });
 }
+
+/**
+ * Resolve the opposite signaling role.
+ * @param {'caller'|'callee'|string} role - Current peer role.
+ * @returns {'caller'|'callee'} The counterpart role.
+ */
 function otherRole(role) { return role === 'caller' ? 'callee' : 'caller'; }
 
 // Remove a WebSocket client from its room; if room becomes empty, delete it.

@@ -42,6 +42,10 @@
   const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
   // ---- Diagnostics ----
+  /**
+   * Dump the currently selected ICE candidate pair for quick troubleshooting.
+   * @param {string} [tag] - Label to include in the console output.
+   */
   async function logSelectedPair(tag = '') {
     try {
       if (!pc) return;
@@ -57,6 +61,10 @@
       });
     } catch (_) {}
   }
+  /**
+   * Log aggregated RTP statistics for inbound and outbound audio streams.
+   * @param {string} [tag] - Label to include in the console output.
+   */
   async function dumpRtp(tag = '') {
     try {
       if (!pc) return;
@@ -69,6 +77,10 @@
       console.log('[RTP]', tag, { inbound: inb, outbound: out });
     } catch (_) {}
   }
+  /**
+   * Print current PeerConnection transceiver directions for visibility.
+   * @param {string} [tag] - Label to include in the console output.
+   */
   function logTransceivers(tag='') {
     try {
       const tx = pc && pc.getTransceivers ? pc.getTransceivers() : [];
@@ -76,6 +88,11 @@
     } catch (_) {}
   }
 
+  /**
+   * Poll until ICE gathering reaches the `complete` state or the timeout elapses.
+   * @param {RTCPeerConnection} target - Peer connection to observe.
+   * @param {number} [ms=2500] - Maximum wait duration in milliseconds.
+   */
   async function waitIceComplete(target, ms = 2500) {
     const t0 = Date.now();
     while (Date.now() < t0 + ms) {
@@ -85,6 +102,11 @@
     }
   }
 
+  /**
+   * Wait for the signaling WebSocket to reach the OPEN state.
+   * @param {number} [ms=2000] - Maximum wait duration in milliseconds.
+   * @returns {Promise<boolean>} Resolves true when the socket is ready.
+   */
   async function waitWsOpen(ms = 2000) {
     const t0 = Date.now();
     while (Date.now() < t0 + ms) {
@@ -94,7 +116,11 @@
     return false;
   }
 
-  // Wait until TURN config (window.__TURN__.iceServers) is available (or timeout)
+  /**
+   * Wait until TURN credentials are populated on the global scope.
+   * @param {number} [ms=4000] - Maximum wait duration in milliseconds.
+   * @returns {Promise<boolean>} Resolves true when TURN data is present.
+   */
   async function waitTurnReady(ms = 4000) {
     const t0 = Date.now();
     while (Date.now() < t0 + ms) {
@@ -109,7 +135,10 @@
   }
   try { if (typeof window !== 'undefined') window.waitTurnReady = waitTurnReady; } catch (_) {}
 
-  // Always refetch TURN credentials before creating a PeerConnection
+  /**
+   * Fetch fresh TURN credentials from the backend and cache them on `window.__TURN__`.
+   * @returns {Promise<object>} Normalized TURN configuration.
+   */
   async function getFreshTurn() {
     try {
       const res = await fetch('/turn-credentials', { cache: 'no-store' });
@@ -131,6 +160,10 @@
     }
   }
 
+  /**
+   * Request a microphone stream from the user (reuse cached stream when available).
+   * @returns {Promise<MediaStream>} Resolved media stream with audio tracks.
+   */
   async function getMic() {
     if (localStream) return localStream;
     try {
@@ -146,6 +179,10 @@
     }
   }
 
+  /**
+   * Acquire the camera stream and merge its tracks into the shared local stream.
+   * @returns {Promise<MediaStream>} Local stream containing video (and audio if present).
+   */
   async function getCam() {
     // Acquire camera and merge tracks into localStream
     try {
@@ -168,6 +205,10 @@
     }
   }
 
+  /**
+   * Ensure a local video track is attached to the peer connection for sending.
+   * Reuses existing senders when possible and promotes sendrecv direction.
+   */
   async function ensureVideoSender() {
     if (!pc || !localStream) return;
     const track = (localStream.getVideoTracks && localStream.getVideoTracks()[0]) || null;
@@ -189,10 +230,18 @@
     }
   }
 
+  /**
+   * Retrieve the cached local media stream if one exists.
+   * @returns {MediaStream|null} The active local stream or null.
+   */
   function getLocalStream() {
     return localStream || null;
   }
 
+  /**
+   * Attach or refresh the local audio sender on the peer connection.
+   * Keeps the sender in sendrecv mode to advertise microphone capability.
+   */
   async function ensureAudioSender() {
     if (!pc || !localStream) return;
     const track = (localStream.getAudioTracks && localStream.getAudioTracks()[0]) || null;
@@ -216,6 +265,10 @@
     }
   }
 
+  /**
+   * Build a PeerConnection ICE configuration from cached TURN data or fall back to STUN.
+   * @returns {{iceServers: Array, iceTransportPolicy?: string}} ICE settings for RTCPeerConnection.
+   */
   function buildIceConfig() {
     const t = (typeof window !== 'undefined' && window.__TURN__) ? window.__TURN__ : {};
     const fallback = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
@@ -231,6 +284,10 @@
     return cfg;
   }
 
+  /**
+   * Obtain (or create) the hidden `<audio>` element used for remote audio playback.
+   * @returns {HTMLAudioElement} Element guaranteed to exist and autoplay.
+   */
   function ensureRemoteAudioElement() {
     let a = document.getElementById('remoteAudio') || document.querySelector('audio');
     if (!a) {
@@ -253,6 +310,9 @@
     return a;
   }
 
+  /**
+   * Reattach any local tracks onto the peer connection when it is recreated.
+   */
   function attachExistingTracks() {
     if (!pc || !localStream) return; // no-op if not ready
     const tracks = localStream.getTracks ? localStream.getTracks() : [];
@@ -262,6 +322,12 @@
     }
   }
 
+  /**
+   * Create (or recreate) the shared RTCPeerConnection, wiring common handlers.
+   * Optionally accepts a callback to receive remote MediaStreams on `ontrack`.
+   * @param {(stream: MediaStream) => void} [onTrackCb] - Remote stream handler.
+   * @returns {Promise<RTCPeerConnection>} The initialized peer connection.
+   */
   async function createPC(onTrackCb) {
     // ensure TURN config is present before building PC so we don't fall back to STUN prematurely
     try { await getFreshTurn(); } catch (_) { console.warn('[WEBRTC] getFreshTurn failed, continuing with existing config'); }
@@ -387,6 +453,10 @@
     return pc;
   }
 
+  /**
+   * Attempt to generate and send an SDP offer when prerequisites are satisfied.
+   * Only the caller role proceeds; gracefully exits otherwise.
+   */
   async function sendOfferIfPossible() {
     // Single attempt only
     if (!pc) {
@@ -450,6 +520,11 @@
     }
   }
 
+  /**
+   * Apply an incoming offer, ensure local media is ready, and respond with an SDP answer.
+   * @param {{sdp?: string}|string} offer - Offer payload received via signaling.
+   * @param {(stream: MediaStream) => void} [onTrackCb] - Remote stream handler.
+   */
   async function acceptIncoming(offer, onTrackCb) {
     try {
       if (!offer) { console.warn('[ACCEPT] no offer'); return; }
@@ -518,6 +593,10 @@
     }
   }
 
+  /**
+   * Feed a remote ICE candidate into the peer connection, queuing if not ready.
+   * @param {RTCIceCandidateInit|string|null} candidate - Candidate payload from signaling.
+   */
   async function addRemoteIce(candidate) {
     if (!pc) { remoteIceQueue.push(candidate); return; }
     if (!pc.remoteDescription) { remoteIceQueue.push(candidate); return; }
@@ -530,6 +609,10 @@
     }
   }
 
+  /**
+   * Tear down the peer connection and reset cached media/ICE state.
+   * @param {string} [reason] - Optional note for diagnostic logging.
+   */
   function cleanup(reason = '') {
     try {
       if (pc) { pc.close(); pc = null; }

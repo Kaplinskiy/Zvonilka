@@ -15,6 +15,10 @@
   let _ws = null;
   let _pingTimer = null;
 
+  /**
+   * Read the currently active room and client identifiers from the window scope.
+   * @returns {{roomId: (string|null), clientId: (string|null)}} Current signaling identifiers.
+   */
   function getIds() {
     try { return { roomId: window.__WS_ROOM__ || null, clientId: window.__CLIENT_ID || null }; }
     catch { return { roomId: null, clientId: null }; }
@@ -107,188 +111,185 @@
   }
 
   /**
-   * Establishes a WebSocket connection to the signaling server.
-   * Supports automatic reconnection with exponential backoff on unexpected closures.
-   * Resolves once a 'hello' message is received from the server with memberId.
-   * @param {'caller'|'callee'} role - Role of the client in the call
-   * @param {string} roomId - The room ID to join
-   * @param {(msg:any)=>void} onMessage - Callback invoked on each incoming message
-   * @returns {Promise<{memberId:string}>} Resolves after receiving 'hello' message
+   * Establish a WebSocket connection to the signaling server with automatic recovery.
+   * @param {'caller'|'callee'} role - Role of the client in the call.
+   * @param {string} roomId - Identifier of the room to join.
+   * @param {(msg: any) => void} onMessage - Callback for inbound messages.
+   * @returns {Promise<{memberId: string}>} Resolves once the server confirms the connection.
    */
-function connectWS(role, roomId, onMessage) {
-  return new Promise((resolve, reject) => {
-    // Internal state for connection attempts and backoff
-    let attempt = 0;                 // Number of connection attempts
-    const maxDelay = 3_000;         // Maximum backoff delay in ms
-    let resolvedHello = false;       // Flag to track if 'hello' message received
-    let closedCleanly = false;       // Flag to indicate clean socket closure
+  function connectWS(role, roomId, onMessage) {
+    return new Promise((resolve, reject) => {
+      // Internal state for connection attempts and backoff
+      let attempt = 0;                 // Number of connection attempts
+      const maxDelay = 3_000;         // Maximum backoff delay in ms
+      let resolvedHello = false;       // Flag to track if 'hello' message received
+      let closedCleanly = false;       // Flag to indicate clean socket closure
 
-    /**
-     * Opens the WebSocket connection and sets up event handlers.
-     * Handles automatic reconnection logic on unexpected closures.
-     */
-    const openSocket = () => {
-      const q = new URLSearchParams({ roomId: roomId, role, clientId: (window.__CLIENT_ID || '') }).toString();
-      const url = `${CFG.WS_URL}?${q}`;
-      window.addLog && window.addLog('signal', `connect WS ${url}`);
+      /**
+       * Opens the WebSocket connection and wires handlers plus reconnection logic.
+       */
+      const openSocket = () => {
+        const q = new URLSearchParams({ roomId: roomId, role, clientId: (window.__CLIENT_ID || '') }).toString();
+        const url = `${CFG.WS_URL}?${q}`;
+        window.addLog && window.addLog('signal', `connect WS ${url}`);
 
-      _ws = new WebSocket(url);
-      try { console.debug('[WS] opening', url); } catch {}
-      // ensure wsSend always targets current socket
-      try { if (typeof window !== 'undefined') { window.wsSend = wsSend; } } catch {}
-      try {
-        if (typeof window !== 'undefined') {
-          window.__WS__ = _ws;
-          window.__WS_ROOM__ = roomId;
-          window.__WS_ROLE__ = role;
-          window.ws = _ws;
-          if (!window.__WS_BEFOREUNLOAD_BOUND__) {
-            window.addEventListener('beforeunload', () => { try { _ws && _ws.close(1000, 'leave'); } catch {} });
-            window.__WS_BEFOREUNLOAD_BOUND__ = true;
-          }
-        }
-      } catch {}
-
-      _ws.onopen = () => {
-        window.ws = _ws;
-        window.addLog && window.addLog('signal', 'ws open');
-        _pingTimer = setInterval(() => {
-          try { _ws?.send(JSON.stringify({ type: 'ping', t: Date.now() })); } catch {}
-        }, 20_000);
-        attempt = 0;
-      };
-
-      _ws.onmessage = (ev) => {
-        try { console.debug('[WS-IN]', ev.data); } catch {}
-        let msg;
-        try { msg = JSON.parse(ev.data); } catch { msg = ev.data; }
-        // Normalize: turn raw strings or alias types into canonical objects
-        try {
-          if (typeof msg === 'string') {
-            // Some backends forward plain candidate lines
-            if (/^candidate:/.test(msg)) msg = { type: 'ice', candidate: msg };
-          } else if (msg && typeof msg === 'object') {
-            const t = String(msg.type || '').toLowerCase();
-            if (t === 'icecandidate' || t === 'candidate') {
-              msg = { type: 'ice', candidate: (msg.candidate ?? msg.payload ?? msg.data ?? null) };
-            }
-          }
-        } catch {}
-
-        // Ensure ICE candidate has m-line hints for browsers that require them
-        try {
-          if (msg && msg.type === 'ice') {
-            if (msg.candidate === null) {
-              // end-of-candidates marker
-            } else if (typeof msg.candidate === 'string') {
-              msg.candidate = { candidate: msg.candidate, sdpMid: '0', sdpMLineIndex: 0 };
-            } else if (msg.candidate && typeof msg.candidate === 'object') {
-              if (!('candidate' in msg.candidate) && typeof msg.candidate.candidate !== 'string') {
-                // some backends may wrap in payload field
-                const raw = msg.candidate.payload || msg.candidate.data || null;
-                if (typeof raw === 'string') msg.candidate = { candidate: raw };
-              }
-              if (!('sdpMid' in msg.candidate) && !('sdpMLineIndex' in msg.candidate)) {
-                msg.candidate.sdpMid = '0';
-                msg.candidate.sdpMLineIndex = 0;
-              }
-            }
-          }
-        } catch {}
-
-        try { window.__SIG_HOOK && window.__SIG_HOOK(msg); } catch {}
-
-        // Drop messages for other clients or from stale sockets
-        try {
-          if (msg && typeof msg === 'object' && msg.toClientId && window.__CLIENT_ID && msg.toClientId !== window.__CLIENT_ID) {
-            return; // not for this client
-          }
-          if (window.__WS__ && _ws !== window.__WS__) {
-            return; // message from stale socket instance
-          }
-        } catch {}
-
-        // Ignore ping messages from server
-        if (typeof msg === 'object' && msg && msg.type === 'ping') {
-          window.addLog && window.addLog('signal', 'recv ping');
-          return;
-        }
-        // On receiving 'hello' message for the first time, resolve the connectWS promise
-        if (msg && msg.type === 'hello' && !resolvedHello) {
-          resolvedHello = true;
-          resolve({ memberId: msg.memberId || 'unknown' });
-        }
-        // Pass all other messages to the provided callback
-        onMessage && onMessage(msg);
-      };
-
-      _ws.onerror = () => {
-        window.addLog && window.addLog('error', 'ws error');
-      };
-
-      _ws.onclose = (e) => {
-        if (window.__WS__ && _ws !== window.__WS__) { return; }
-        window.addLog && window.addLog('signal', `ws close code=${e.code} reason=${e.reason || '-'}`);
-        if (_pingTimer) { clearInterval(_pingTimer); _pingTimer = null; }
+        _ws = new WebSocket(url);
+        try { console.debug('[WS] opening', url); } catch {}
+        // ensure wsSend always targets current socket
+        try { if (typeof window !== 'undefined') { window.wsSend = wsSend; } } catch {}
         try {
           if (typeof window !== 'undefined') {
-            if (window.__WS__ === _ws) {
-              window.__WS__ = null;
-              window.__WS_ROOM__ = null;
-              window.__WS_ROLE__ = null;
-              window.ws = null;
+            window.__WS__ = _ws;
+            window.__WS_ROOM__ = roomId;
+            window.__WS_ROLE__ = role;
+            window.ws = _ws;
+            if (!window.__WS_BEFOREUNLOAD_BOUND__) {
+              window.addEventListener('beforeunload', () => { try { _ws && _ws.close(1000, 'leave'); } catch {} });
+              window.__WS_BEFOREUNLOAD_BOUND__ = true;
             }
           }
         } catch {}
 
-        // If the socket closed cleanly (normal closure codes), do not attempt reconnect
-        const normal = (e.code === 1000 || e.code === 1005);
-        if (normal) {
-          closedCleanly = true;
-          return;
-        }
+        _ws.onopen = () => {
+          window.ws = _ws;
+          window.addLog && window.addLog('signal', 'ws open');
+          _pingTimer = setInterval(() => {
+            try { _ws?.send(JSON.stringify({ type: 'ping', t: Date.now() })); } catch {}
+          }, 20_000);
+          attempt = 0;
+        };
 
-        // If we haven't received the 'hello' message yet, reject the initial connect promise
-        if (!resolvedHello) {
-          reject(new Error('WebSocket closed before hello'));
-          return;
-        }
+        _ws.onmessage = (ev) => {
+          try { console.debug('[WS-IN]', ev.data); } catch {}
+          let msg;
+          try { msg = JSON.parse(ev.data); } catch { msg = ev.data; }
+          // Normalize: turn raw strings or alias types into canonical objects
+          try {
+            if (typeof msg === 'string') {
+              // Some backends forward plain candidate lines
+              if (/^candidate:/.test(msg)) msg = { type: 'ice', candidate: msg };
+            } else if (msg && typeof msg === 'object') {
+              const t = String(msg.type || '').toLowerCase();
+              if (t === 'icecandidate' || t === 'candidate') {
+                msg = { type: 'ice', candidate: (msg.candidate ?? msg.payload ?? msg.data ?? null) };
+              }
+            }
+          } catch {}
 
-        // Automatic reconnect with exponential backoff up to maxDelay
-        if (!closedCleanly) {
-          attempt += 1;
-          const base = 200;
-          const jitter = Math.floor(Math.random() * 100);
-          const delay = Math.min(base * 2 ** (attempt - 1) + jitter, maxDelay);
-          if (typeof window.setStatusKey === 'function') {
-            window.setStatusKey('signal.recovering', 'warn');
-          } else if (typeof window.setStatus === 'function') {
-            window.setStatus(t('signal.recovering', 'Restoring signaling connection…'), 'warn');
+          // Ensure ICE candidate has m-line hints for browsers that require them
+          try {
+            if (msg && msg.type === 'ice') {
+              if (msg.candidate === null) {
+                // end-of-candidates marker
+              } else if (typeof msg.candidate === 'string') {
+                msg.candidate = { candidate: msg.candidate, sdpMid: '0', sdpMLineIndex: 0 };
+              } else if (msg.candidate && typeof msg.candidate === 'object') {
+                if (!('candidate' in msg.candidate) && typeof msg.candidate.candidate !== 'string') {
+                  // some backends may wrap in payload field
+                  const raw = msg.candidate.payload || msg.candidate.data || null;
+                  if (typeof raw === 'string') msg.candidate = { candidate: raw };
+                }
+                if (!('sdpMid' in msg.candidate) && !('sdpMLineIndex' in msg.candidate)) {
+                  msg.candidate.sdpMid = '0';
+                  msg.candidate.sdpMLineIndex = 0;
+                }
+              }
+            }
+          } catch {}
+
+          try { window.__SIG_HOOK && window.__SIG_HOOK(msg); } catch {}
+
+          // Drop messages for other clients or from stale sockets
+          try {
+            if (msg && typeof msg === 'object' && msg.toClientId && window.__CLIENT_ID && msg.toClientId !== window.__CLIENT_ID) {
+              return; // not for this client
+            }
+            if (window.__WS__ && _ws !== window.__WS__) {
+              return; // message from stale socket instance
+            }
+          } catch {}
+
+          // Ignore ping messages from server
+          if (typeof msg === 'object' && msg && msg.type === 'ping') {
+            window.addLog && window.addLog('signal', 'recv ping');
+            return;
           }
-          window.addLog && window.addLog('signal', `ws reconnect in ${delay}ms (attempt ${attempt})`);
-          setTimeout(() => {
-            // Prevent race conditions: if a new socket is already open, do not open another
-            if (_ws && _ws.readyState === WebSocket.OPEN) return;
-            openSocket();
-          }, delay);
-        }
+          // On receiving 'hello' message for the first time, resolve the connectWS promise
+          if (msg && msg.type === 'hello' && !resolvedHello) {
+            resolvedHello = true;
+            resolve({ memberId: msg.memberId || 'unknown' });
+          }
+          // Pass all other messages to the provided callback
+          onMessage && onMessage(msg);
+        };
+
+        _ws.onerror = () => {
+          window.addLog && window.addLog('error', 'ws error');
+        };
+
+        _ws.onclose = (e) => {
+          if (window.__WS__ && _ws !== window.__WS__) { return; }
+          window.addLog && window.addLog('signal', `ws close code=${e.code} reason=${e.reason || '-'}`);
+          if (_pingTimer) { clearInterval(_pingTimer); _pingTimer = null; }
+          try {
+            if (typeof window !== 'undefined') {
+              if (window.__WS__ === _ws) {
+                window.__WS__ = null;
+                window.__WS_ROOM__ = null;
+                window.__WS_ROLE__ = null;
+                window.ws = null;
+              }
+            }
+          } catch {}
+
+          // If the socket closed cleanly (normal closure codes), do not attempt reconnect
+          const normal = (e.code === 1000 || e.code === 1005);
+          if (normal) {
+            closedCleanly = true;
+            return;
+          }
+
+          // If we haven't received the 'hello' message yet, reject the initial connect promise
+          if (!resolvedHello) {
+            reject(new Error('WebSocket closed before hello'));
+            return;
+          }
+
+          // Automatic reconnect with exponential backoff up to maxDelay
+          if (!closedCleanly) {
+            attempt += 1;
+            const base = 200;
+            const jitter = Math.floor(Math.random() * 100);
+            const delay = Math.min(base * 2 ** (attempt - 1) + jitter, maxDelay);
+            if (typeof window.setStatusKey === 'function') {
+              window.setStatusKey('signal.recovering', 'warn');
+            } else if (typeof window.setStatus === 'function') {
+              window.setStatus(t('signal.recovering', 'Restoring signaling connection…'), 'warn');
+            }
+            window.addLog && window.addLog('signal', `ws reconnect in ${delay}ms (attempt ${attempt})`);
+            setTimeout(() => {
+              // Prevent race conditions: if a new socket is already open, do not open another
+              if (_ws && _ws.readyState === WebSocket.OPEN) return;
+              openSocket();
+            }, delay);
+          }
+        };
       };
-    };
 
-    // Avoid opening multiple connections; if open to other room/role, close and reopen
-    if (_ws && (_ws.readyState === WebSocket.OPEN || _ws.readyState === WebSocket.CONNECTING)) {
-      const same = (window.__WS_ROOM__ === roomId && window.__WS_ROLE__ === role);
-      if (same) {
-        window.addLog && window.addLog('warn', `WS already connected (${role})`);
-        resolve({ memberId: 'already-open' });
-        return;
+      // Avoid opening multiple connections; if open to other room/role, close and reopen
+      if (_ws && (_ws.readyState === WebSocket.OPEN || _ws.readyState === WebSocket.CONNECTING)) {
+        const same = (window.__WS_ROOM__ === roomId && window.__WS_ROLE__ === role);
+        if (same) {
+          window.addLog && window.addLog('warn', `WS already connected (${role})`);
+          resolve({ memberId: 'already-open' });
+          return;
+        }
+        try { _ws.close(1000, 'switch-room-or-role'); } catch {}
       }
-      try { _ws.close(1000, 'switch-room-or-role'); } catch {}
-    }
 
-    openSocket();
-  });
-}
+      openSocket();
+    });
+  }
 
   /**
    * Sends a JSON message of the specified type over the WebSocket.

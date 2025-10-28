@@ -133,11 +133,19 @@ function renderLangSwitch(active) {
   let __camFacing = 'user';
   let __remoteStream = null;
 
+  /**
+   * Cache the remote MediaStream and mirror it into the remote video element when needed.
+   * @param {MediaStream} s - Remote stream delivered by WebRTC.
+   */
   function bindRemoteStream(s) {
     __remoteStream = s;
     if (__videoMode && remoteVideo) remoteVideo.srcObject = s;
   }
 
+  /**
+   * Attempt to auto-answer an incoming offer for the callee when all preconditions are met.
+   * Respects ongoing answers and waits for signaling, TURN, and media readiness.
+   */
   async function autoAnswerIfReady() {
     try {
       if (role !== 'callee') return;
@@ -175,6 +183,10 @@ function renderLangSwitch(active) {
     }
   }
 
+  /**
+   * Toggle the video UI layout and sync remote/local preview visibility.
+   * @param {boolean} on - Whether video mode should be active.
+   */
   function setVideoMode(on){
     __videoMode = !!on;
     if (videoWrap) videoWrap.style.display = on ? 'block' : 'none';
@@ -185,6 +197,10 @@ function renderLangSwitch(active) {
     if (lp) lp.style.display = on ? 'block' : 'none';
   }
 
+  /**
+   * Create (if necessary) and return the local preview video element.
+   * @returns {HTMLVideoElement} Video element showing the local camera feed.
+   */
   function ensureLocalPreviewElement(){
     let el = document.getElementById('localPreview');
     if (!el) {
@@ -204,6 +220,10 @@ function renderLangSwitch(active) {
     return el;
   }
 
+  /**
+   * Bind the local MediaStream to the preview element whenever video mode is active.
+   * @returns {Promise<void>}
+   */
   async function bindLocalPreview(){
     try {
       const s = (window.__WEBRTC__ && typeof window.__WEBRTC__.getLocalStream === 'function')
@@ -216,6 +236,10 @@ function renderLangSwitch(active) {
   }
 
   // --- LOCAL MIC CONTROL (toggle sender.track.enabled) ---
+  /**
+   * Locate the outbound audio RTCRtpSender on the current peer connection.
+   * @returns {RTCRtpSender|null} Audio sender or null when unavailable.
+   */
   function getLocalAudioSender() {
     try {
       const pc = (window.getPC && window.getPC());
@@ -223,6 +247,10 @@ function renderLangSwitch(active) {
       return pc.getSenders().find(s => s && s.track && s.track.kind === 'audio') || null;
     } catch { return null; }
   }
+  /**
+   * Enable or disable the local microphone track and update related UI hints.
+   * @param {boolean} muted - True to mute the microphone.
+   */
   function setLocalMicMuted(muted) {
     try {
       const s = getLocalAudioSender();
@@ -231,12 +259,20 @@ function renderLangSwitch(active) {
       if (btnMicToggle) btnMicToggle.setAttribute('aria-pressed', muted ? 'true' : 'false');
     } catch {}
   }
+  /**
+   * Determine whether the local microphone sender is currently muted.
+   * @returns {boolean} True when the audio track is disabled.
+   */
   function getLocalMicMuted() {
     const s = getLocalAudioSender();
     return !s || !s.track ? false : (s.track.enabled === false);
   }
 
   // --- LOCAL VIDEO SENDER HELPERS ---
+  /**
+   * Locate the outbound video RTCRtpSender on the current peer connection.
+   * @returns {RTCRtpSender|null} Video sender or null when absent.
+   */
   function getLocalVideoSender() {
     try {
       const pc = (window.getPC && window.getPC());
@@ -245,7 +281,11 @@ function renderLangSwitch(active) {
     } catch { return null; }
   }
 
-  // Wait until TURN creds are loaded to avoid creating PC with empty ICE config
+  /**
+   * Wait until TURN credentials are available before attempting peer connection work.
+   * @param {number} [timeoutMs=6000] - Maximum wait time in milliseconds.
+   * @returns {Promise<boolean>} Resolves true when TURN data is ready.
+   */
   async function waitTurnReady(timeoutMs = 6000) {
     const t0 = Date.now();
     while (Date.now() - t0 < timeoutMs) {
@@ -262,6 +302,11 @@ function renderLangSwitch(active) {
   let __audioViz = { ctx: null, analyser: null, srcNode: null, raf: null };
   let __callTimer = { start: null, int: null };
 
+  /**
+   * Format elapsed milliseconds into a mm:ss or h:mm:ss string for the call timer.
+   * @param {number} ms - Milliseconds since call start.
+   * @returns {string} Human-readable duration.
+   */
   function formatDuration(ms){
     const total = Math.max(0, Math.floor(ms/1000));
     const h = Math.floor(total/3600);
@@ -271,6 +316,9 @@ function renderLangSwitch(active) {
     return h>0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
   }
 
+  /**
+   * Start the on-screen call duration timer.
+   */
   function startCallTimer(){
     if (!callTimerEl) return;
     __callTimer.start = Date.now();
@@ -280,12 +328,19 @@ function renderLangSwitch(active) {
       callTimerEl.textContent = formatDuration(Date.now()-__callTimer.start);
     }, 1000);
   }
+  /**
+   * Stop and reset the call duration timer display.
+   */
   function stopCallTimer(){
     clearInterval(__callTimer.int);
     __callTimer.int = null; __callTimer.start = null;
     if (callTimerEl) callTimerEl.textContent = '';
   }
 
+  /**
+   * Boot the audio visualizer and call timer using the provided remote MediaStream.
+   * @param {MediaStream} stream - Remote audio stream to visualize.
+   */
   async function startAudioViz(stream) {
     try {
       if (!stream) return;
@@ -330,6 +385,10 @@ function renderLangSwitch(active) {
     } catch {}
   }
 
+  /**
+   * Ensure the remote audio element plays the current peer connection audio track.
+   * Re-triggers the visualizer when new audio arrives.
+   */
   async function ensureRemoteAudioBinding(){
     try {
       const pc = (window.getPC && window.getPC());
@@ -346,6 +405,9 @@ function renderLangSwitch(active) {
     } catch {}
   }
 
+  /**
+   * Tear down the audio visualizer and hide associated UI elements.
+   */
   function stopAudioViz(){
     try { if (__audioViz.raf) cancelAnimationFrame(__audioViz.raf); } catch {}
     try { if (__audioViz.ctx) __audioViz.ctx.close(); } catch {}
@@ -356,6 +418,10 @@ function renderLangSwitch(active) {
   }
 
   // --- HANG BUTTON SIZING ---
+  /**
+   * Expand or shrink the hang-up button depending on call state.
+   * @param {boolean} [on=true] - Whether the enlarged style should apply.
+   */
   function setHangBig(on = true) {
     if (!btnHang) return;
     try {
@@ -372,6 +438,9 @@ function renderLangSwitch(active) {
   }
 
   // --- IN-CALL UI FLIP HELPER ---
+  /**
+   * Switch the UI into the in-call layout and start audio playback helpers.
+   */
   function flipInCallUI() {
     try {
       setStatusKey('status.in_call', 'ok');
@@ -389,6 +458,9 @@ function renderLangSwitch(active) {
   }
 
   // --- WATCH PEER CONNECTION STATE → DRIVE UI ---
+  /**
+   * Attach listeners to the active peer connection to drive UI state transitions.
+   */
   function installPcStateWatch() {
     try {
       const pc = (window.getPC && window.getPC());
@@ -525,7 +597,12 @@ let offerAttempted = false;
 let calleeArmed = false;
 let hangInProgress = false;
 
-  // Direct one-shot initial offer sender (avoids timeouts in trigger)
+  /**
+   * Attempt a single immediate offer send, used when caller flow arms quickly.
+   * Waits briefly for stable signaling before delegating to sendOfferIfPossible.
+   * @param {number} [maxWaitMs=3000] - Maximum wait time before giving up.
+   * @returns {Promise<boolean>} True when an offer was requested.
+   */
   async function sendInitialOfferOnce(maxWaitMs = 3000) {
     // 1) ensure WS is OPEN
     try { await (typeof waitWSOpen === 'function' ? waitWSOpen(1500) : Promise.resolve()); } catch {}
@@ -547,7 +624,11 @@ let hangInProgress = false;
     return false;
   }
 
-  // Trigger offer only when WS is open and PC exists; retry with backoff for a short window
+  /**
+   * Retry until WebSocket and peer connection are ready, then fire sendOfferIfPossible.
+   * @param {number} [maxMs=10000] - Maximum time to keep retrying.
+   * @returns {Promise<boolean>} True when an offer attempt was made.
+   */
   async function triggerOfferWhenReady(maxMs = 10000) {
     const t0 = Date.now();
     let pcCreatedOnce = false;

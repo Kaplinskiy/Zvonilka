@@ -1,3 +1,7 @@
+/**
+ * Build the ICE configuration using fetched TURN credentials or a STUN fallback.
+ * @returns {{ iceServers: Array, iceTransportPolicy?: string }}
+ */
 function buildIceConfig(){
   const t = (typeof window !== 'undefined' && window.__TURN__) ? window.__TURN__ : {};
   const fallback = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
@@ -8,7 +12,11 @@ function buildIceConfig(){
   return cfg;
 }
 
-// Wait until TURN config (window.__TURN__.iceServers) is available, up to a timeout
+/**
+ * Wait until the TURN configuration is populated on `window.__TURN__`.
+ * @param {number} [ms=4000] - Maximum wait time in milliseconds.
+ * @returns {Promise<boolean>} Resolves true when TURN data is available.
+ */
 async function waitTurnReady(ms = 4000) {
   const start = Date.now();
   while (Date.now() - start < ms) {
@@ -27,7 +35,11 @@ if (typeof window !== 'undefined') {
   if (!window.__TURN_PROMISE__) window.__TURN_PROMISE__ = Promise.resolve();
 }
 
-// Load TURN configuration asynchronously (TCP-only relay)
+/**
+ * Load fresh TURN credentials from the backend and normalize their format.
+ * @param {boolean} [force=false] - Force refetch even if cached credentials exist.
+ * @returns {Promise<object>} The normalized TURN configuration object.
+ */
 async function loadTurnConfig(force = false) {
   const url = '/signal/turn-credentials';
   try {
@@ -82,4 +94,3 @@ async function loadTurnConfig(force = false) {
 if (typeof window !== 'undefined') {
   window.loadTurnConfig = loadTurnConfig;
 }
-
