@@ -139,7 +139,11 @@ function renderLangSwitch(active) {
    */
   function bindRemoteStream(s) {
     __remoteStream = s;
-    if (__videoMode && remoteVideo) remoteVideo.srcObject = s;
+    if (remoteVideo) remoteVideo.srcObject = s;
+    try {
+      const hasVideo = !!(s && typeof s.getVideoTracks === 'function' && s.getVideoTracks().length);
+      if (hasVideo) setVideoMode(true);
+    } catch {}
   }
 
   /**
