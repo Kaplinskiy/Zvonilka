@@ -615,7 +615,25 @@
    */
   function cleanup(reason = '') {
     try {
+      if (localStream) {
+        try {
+          // Stop local media tracks so devices (camera/mic) power down after hangup.
+          for (const track of localStream.getTracks ? localStream.getTracks() : []) {
+            try { track.stop(); } catch (_) {}
+          }
+        } catch (_) {}
+        try {
+          localStream.getTracks?.().forEach(track => {
+            try { localStream.removeTrack && localStream.removeTrack(track); } catch (_) {}
+          });
+        } catch (_) {}
+        const preview = typeof document !== 'undefined' ? document.getElementById('localPreview') : null;
+        if (preview && preview.srcObject === localStream) {
+          try { preview.srcObject = null; } catch (_) {}
+        }
+      }
       if (pc) { pc.close(); pc = null; }
+      try { if (typeof window !== 'undefined') window.__WANTS_VIDEO__ = false; } catch (_) {}
       localStream = null;
       sentLocalIce.clear();
       endOfCandidatesSent = false;
