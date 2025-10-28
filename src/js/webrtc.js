@@ -649,4 +649,5 @@
   window.getPC = window.getPC || getPC;
   window.sendOfferIfPossible = window.sendOfferIfPossible || sendOfferIfPossible;
   window.acceptIncoming = window.acceptIncoming || acceptIncoming;
+  window.cleanup = window.cleanup || cleanup;
 })();
